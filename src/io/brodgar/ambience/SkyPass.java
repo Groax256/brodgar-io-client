@@ -94,6 +94,7 @@ public class SkyPass implements RenderTree.Node {
     static final Uniform stars = new Uniform(FLOAT, p -> Ambience.frame().stars, FrameInfo.slot);
     static final Uniform disc = new Uniform(FLOAT, p -> Ambience.frame().disc, FrameInfo.slot);
     static final Uniform ccol = new Uniform(VEC3, p -> Ambience.frame().ccol, FrameInfo.slot);
+    static final Uniform bright = new Uniform(FLOAT, p -> (float)(haven.MapView.brightness - haven.MapView.brightmin), FrameInfo.slot);
     static final Uniform mdir = new Uniform(VEC3, p -> Ambience.frame().mdir, FrameInfo.slot);
     static final Uniform mcol = new Uniform(VEC3, p -> Ambience.frame().mcol, FrameInfo.slot);
     static final Uniform mphase = new Uniform(FLOAT, p -> Ambience.frame().mphase, FrameInfo.slot);
@@ -313,8 +314,10 @@ public class SkyPass implements RenderTree.Node {
 	/* The open sky where nothing was drawn, the fog's colour everywhere else: each only where it shows,
 	 * and the sky -- the stars, the moon -- is the dearer of the two. */
 	LValue fc = code.local(VEC3, null).ref();
+	/* The fog's colour is lifted with the brightness (MapView.brightness) towards a clear noon's horizon, as
+	 * the ground under it is: the open sky keeps its own hour. */
 	code.add(new If(gt(issky, l(0.5)), stmt(ass(fc, skyopen.call(v))),
-			stmt(ass(fc, skybase.call(normalize(vec3(pick(v, "xy"), l(0.03))))))));
+			stmt(ass(fc, mix(skybase.call(normalize(vec3(pick(v, "xy"), l(0.03)))), vec3(l(0.64), l(0.75), l(0.90)), bright.ref())))));
 	Expression ff = code.local(FLOAT, mix(f, skyon.ref(), issky)).ref();
 	Expression m = code.local(VEC4, texture2D(scl.ref(), Tex2D.rtexcoord.ref())).ref();
 	Expression tr = code.local(FLOAT, sub(l(1.0), pick(m, "a"))).ref();

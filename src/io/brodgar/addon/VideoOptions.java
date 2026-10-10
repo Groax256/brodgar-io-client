@@ -172,6 +172,18 @@ public final class VideoOptions {
                     apply(gs.maxlights, n, "lightLimit");
             }
         });
+        m.set("brightness", new OptionsMethod(owner, handle, "video:brightness") {
+            protected LuaValue onRead() {
+                return LuaValue.valueOf(haven.MapView.brightness);
+            }
+            protected void onWrite(LuaValue value) {
+                double v = num(value, "v", "the brightness, 1 to 2").todouble();
+                if(!(v >= haven.MapView.brightmin && v <= haven.MapView.brightmax))
+                    throw new LuaError("video:brightness(v) — must be between " + haven.MapView.brightmin
+                                       + " and " + haven.MapView.brightmax + " (got " + value.tojstring() + ")");
+                haven.MapView.brightness(v);
+            }
+        });
         return m;
     }
 }

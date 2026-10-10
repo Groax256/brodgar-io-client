@@ -144,12 +144,14 @@ hafen.log():write("crop density: " .. performance:crops() .. " %")
 | `bgFpsLimit()` / `bgFpsLimit(value)` | `number` | read Unprotected / write `client.settings` | Background (unfocused) framerate cap. `math.huge` is no limit. |
 | `lightingMode()` / `lightingMode(name)` | `string` | read Unprotected / write `client.settings` | `"simple"` or `"zoned"`. |
 | `lightLimit()` / `lightLimit(count)` | `number` | read Unprotected / write `client.settings` | Maximum simultaneous dynamic lights. |
+| `brightness()` / `brightness(value)` | `number` | read Unprotected / write `client.settings` | How far the sun's light is mixed towards a sunny noon: `1` is the game's own light, `2` is noon whatever the hour, night included. Default `1`. The *Brightness* slider. |
 
 | Rule | Detail |
 |---|---|
 | `math.huge` round-trips | Reading an uncapped limit gives `math.huge`. Writing it removes the cap. |
 | A value the renderer refuses | Raises carrying the client's own message. |
 | A write reaches every session | The renderer keeps settings per tree and every tree persists to one file, so a write moves every scene. The read is the drawn tree's. |
+| `brightness` is the client's | One value for every session, applied within a frame. Outside `1`..`2` it raises. *Reset to defaults* leaves it where it is. |
 
 ## `audio()`
 

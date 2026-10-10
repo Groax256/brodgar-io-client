@@ -323,6 +323,40 @@ public class OptWnd extends Window {
 			   },
 			   dpy);
 		}
+		/* addon: brightness -- a client preference, not a GSettings one: the slider moves MapView.brightness,
+		 * and follows it when video():brightness() moves it from Lua. */
+		prev = add(new Label("Brightness"), prev.pos("bl").adds(0, 5).x(0));
+		{
+		    Label dpy = new Label("");
+		    addhlp(prev.pos("bl").adds(0, 2), UI.scale(5),
+			   prev = new HSlider(UI.scale(160), 0, 100, (int)Math.round((MapView.brightness - MapView.brightmin) * 100)) {
+			       int shown = val;
+			       protected void added() {
+				   dpy();
+			       }
+			       void dpy() {
+				   dpy.settext(String.format("%.2f", MapView.brightmin + this.val / 100.0));
+			       }
+			       public void changed() {
+				   MapView.brightness(MapView.brightmin + this.val / 100.0);
+				   shown = this.val;
+				   dpy();
+			       }
+			       public void tick(double dt) {
+				   super.tick(dt);
+				   int want = (int)Math.round((MapView.brightness - MapView.brightmin) * 100);
+				   if(want != shown) {
+				       this.val = shown = want;
+				       dpy();
+				   }
+			       }
+			       {
+				   settip("Lights the world as if it were a sunny noon: at the left end the light is the " +
+					  "game's own, at the right end it is noon whatever the hour, night included.", true);
+			       }
+			   },
+			   dpy);
+		}
 		prev = add(new Label("Frame sync mode"), prev.pos("bl").adds(0, 5).x(0));
 		{
 		    boolean[] done = {false};

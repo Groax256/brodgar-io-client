@@ -101,6 +101,24 @@ public class MapView extends PView implements DTarget, Console.Directory {
     public static float recallreach() {
 	return((float)((recallrange + 1) * MCache.cmaps.x * MCache.tilesz.x * Math.sqrt(2)));
     }
+    /* addon: brightness -- how far amblight() mixes the sun's colours towards a fixed sunny noon: 1 is the
+     * sun as the game (or the improved sky) lights it, 2 is that noon outright, night or day, the light other
+     * clients call night vision. In between is the mix. The Video page's slider and video():brightness(). */
+    public static final double brightmin = 1.0, brightmax = 2.0;
+    static final Color brightamb = new Color(96, 96, 160), brightdif = new Color(255, 255, 208), brightspc = new Color(255, 255, 255);
+    public static volatile double brightness = Utils.clip(Utils.getprefd("brightness", brightmin), brightmin, brightmax);
+    public static void brightness(double b) {
+	Utils.setprefd("brightness", brightness = Utils.clip(b, brightmin, brightmax));
+	io.brodgar.ambience.Ambience.lightgen++;   // addon: the cel dimming reads it (Ambience.celscale)
+    }
+    private static Color brighten(Color c, Color to, double t) {
+	if(t <= 0)
+	    return(c);
+	return(new Color((int)Math.round(c.getRed()   + (to.getRed()   - c.getRed())   * t),
+			 (int)Math.round(c.getGreen() + (to.getGreen() - c.getGreen()) * t),
+			 (int)Math.round(c.getBlue()  + (to.getBlue()  - c.getBlue())  * t),
+			 c.getAlpha()));
+    }
     /* addon: (066.2) linked, so camnames() -- and the Options ▸ Camera dropdown reading it -- comes
      * out in the order the camera classes are declared, rather than in a hash order nobody chose. */
     private static final Map<String, Class<? extends Camera>> camtypes = new LinkedHashMap<String, Class<? extends Camera>>();
@@ -3494,18 +3512,21 @@ public class MapView extends PView implements DTarget, Console.Directory {
     private void amblight() {
 	synchronized(glob) {
 	    io.brodgar.ambience.Ambience.Sun pv = io.brodgar.ambience.Ambience.sun(glob);   // addon: ambience -- the improved sky's day and night
-	    Object[] key = (pv != null) ? new Object[] {pv.amb, pv.dif, pv.spc, pv.elev, pv.ang} :
-		(glob.lightamb != null) ? new Object[] {glob.lightamb, glob.lightdif, glob.lightspc, glob.lightelev, glob.lightang} :
+	    double bt = brightness - brightmin;   // addon: brightness
+	    Object[] key = (pv != null) ? new Object[] {pv.amb, pv.dif, pv.spc, pv.elev, pv.ang, bt} :
+		(glob.lightamb != null) ? new Object[] {glob.lightamb, glob.lightdif, glob.lightspc, glob.lightelev, glob.lightang, bt} :
 		null;
 	    if(Arrays.equals(key, sunkey) && ((key == null) == (s_amblight == null)))   // addon: the same sun
 		return;
 	    sunkey = key;
 	    nsuns++;   // addon: for `instcensus`
 	    if(pv != null) {
-		amblight = new DirLight(pv.amb, pv.dif, pv.spc, Coord3f.o.sadd(pv.elev, pv.ang, 1f));
+		amblight = new DirLight(brighten(pv.amb, brightamb, bt), brighten(pv.dif, brightdif, bt), brighten(pv.spc, brightspc, bt),
+					Coord3f.o.sadd(pv.elev, pv.ang, 1f));
 		amblight.prio(100);
 	    } else if(glob.lightamb != null) {
-		amblight = new DirLight(glob.lightamb, glob.lightdif, glob.lightspc, Coord3f.o.sadd((float)glob.lightelev, (float)glob.lightang, 1f));
+		amblight = new DirLight(brighten(glob.lightamb, brightamb, bt), brighten(glob.lightdif, brightdif, bt), brighten(glob.lightspc, brightspc, bt),
+					Coord3f.o.sadd((float)glob.lightelev, (float)glob.lightang, 1f));
 		amblight.prio(100);
 	    } else {
 		amblight = null;

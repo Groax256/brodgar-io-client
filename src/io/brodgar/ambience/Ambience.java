@@ -298,7 +298,9 @@ public class Ambience {
 	    RenderContext ctx = p.get(RenderContext.slot);
 	    if(!(ctx instanceof PView.WidgetContext) || !(((PView.WidgetContext)ctx).widget() instanceof MapView))
 		return(1f);
-	    return(d.cel);
+	    /* The brightness (MapView.brightness) lifts the light towards a noon, and the dimming with it. */
+	    float bt = (float)(MapView.brightness - MapView.brightmin);
+	    return(d.cel + ((1 - d.cel) * bt));
 	}, RenderContext.slot, haven.render.Lighting.lights);
 
     /* The light of the improved sky's day and night (Daylight), or null for the server's own: asked by
