@@ -74,6 +74,7 @@ public class LoginWarmup {
 	try {
 	    preloadhud();
 	    haven.render.gl.ProgramCache.preload();   // the programs the last session's first frames compiled
+	    initclasses();
 	    RichText.render("warm-up", 100);
 	    MCache mc = new MCache(null);
 	    for(int i = 0; i < tilesets.length; i++)
@@ -105,6 +106,22 @@ public class LoginWarmup {
 	} catch(Throwable e) {
 	    /* One line, not silence: a warm-up that gives up is a login that pays what it was meant to spare. */
 	    System.err.println("Login warm-up gave up after " + (System.currentTimeMillis() - t0) + " ms: " + e);
+	}
+    }
+
+    /* Classes whose static initialisers the first frames in the world run on the UI thread, 50-60 ms each:
+     * FastText's (it measures and draws every Latin-1 character of its font into one texture -- the belt's key
+     * labels draw with it) and the sky pass's. Initialised here instead; one that cannot be is a line on stderr
+     * and the world pays for it as before. */
+    private static final String[] classes = {"haven.FastText", "io.brodgar.ambience.SkyPass"};
+
+    private static void initclasses() {
+	for(String nm : classes) {
+	    try {
+		Class.forName(nm, true, LoginWarmup.class.getClassLoader());
+	    } catch(Throwable e) {
+		System.err.println("Login warm-up: could not initialise " + nm + ": " + e);
+	    }
 	}
     }
 
