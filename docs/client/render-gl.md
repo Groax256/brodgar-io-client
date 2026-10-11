@@ -53,6 +53,24 @@ inside `fill`. ⚠️ The fill happens when the slot is **compiled**, in view or
 slot in the draw list before taking an off-screen one out — so adding a slot and removing it at once puts its
 object on the GPU without drawing it.
 
+**Gotcha — everything prepared since the last frame is uploaded before the next one, all of it.**
+`GLEnvironment.prepare(…)` appends to one `prep` render that `process(GL)` replays whole ahead of the frame's own
+commands, and nothing bounds how much it holds: a frame that adds a few megabytes of new meshes and textures
+spends 10–20 ms of the render thread on them, which is the frame rate going from 200 to 40. What is prepared is
+used in that same frame, so a bound cannot sit in the environment; it sits with whoever adds to the scene. Fork:
+`io.brodgar.perf.UploadBudget` — the render thread reports the time it spent replaying `prep`
+(`GLEnvironment.process` → `UploadBudget.rendered`), `UILoop.Frame.run` gives each frame its share, and the
+remembered ground's merged grids, its click map and the far ground's new builds pay for what they upload out of
+it. ⚠️ The fill runs on the thread that compiles the slot — the UI thread for a `slot.add` — and so does a
+filler's conversion: `RUtils.CubeFill` converted the six faces of a cube texture in `fill`, the first frame the
+cube was drawn (water's sky, ~80 ms). Fork: `CubeFill.mktex()` converts them where the texture is made.
+
+**Gotcha — ZONED lighting uploads its cell lists every time it compiles.** `Lighting.LightGrid.compile` makes a
+new `GridLights` with two new textures, the 64³ cell lists (half a megabyte) and the light data, and disposes
+the last pair; it compiles whenever the lights or the projection move ([world-3d.md](world-3d.md)), which a
+flickering light does with the camera standing still. Fork: the cell-list texture is kept while the cell lists
+come out the same.
+
 **Gotcha — a draw list's settings are compiled again whenever a state they depend on changes, and the frame's own
 state changes every frame.** `GLDrawList.update(Pipe, int[])` runs `DepSetting.ckupdate` for every setting whose
 slots the change touches, and `Setting.update` compiles that setting afresh into a new `BufferBGL`: a

@@ -53,6 +53,7 @@ import haven.render.VectorFormat;
 import haven.render.VertexArray;
 
 import io.brodgar.perf.Performance;
+import io.brodgar.perf.UploadBudget;
 
 /**
  * The far ground of the view distance: the recorded ground the view does not draw whole, drawn out of the
@@ -115,8 +116,19 @@ public class RecallLod implements RenderTree.Node {
     public static final int QUADS = 50;
     /** The coarsest level walked: a cell of 128 × 128 grids. */
     public static final int MAXLVL = 7;
-    /** How many built cells are kept besides the ones the tick draws and wants, for the view coming back. */
-    private static final int CACHECAP = 384;
+    /** What a cell's build puts on the GPU, in bytes: its vertex and index buffers, its click mesh's at most, and its
+     * texture's levels -- the same for every cell, as every cell is QUADS by QUADS. */
+    private static final long CELLBYTES;
+    static {
+	int n = QUADS, nv = n + 1;
+	CELLBYTES = ((((long)nv * nv) + (4 * n)) * 32) + ((((long)n * n * 6) + (4L * n * 6)) * 2) + ((long)nv * nv * 20) +
+	    ((long)n * n * 6 * 2) + ((long)RecallLod.TEXSZ * RecallLod.TEXSZ * 4 * 4 / 3);
+    }
+    /** How many built cells are kept besides the ones the tick draws and wants, for the view coming back: CACHEBYTES
+     * of video memory of them. A zoom from the whole map in to the character and back out again goes over thousands
+     * of cells, and a cache of a few hundred had every one of the whole map built and uploaded again on the way out. */
+    private static final long CACHEBYTES = 512L << 20;
+    private static final int CACHECAP = (int)(CACHEBYTES / CELLBYTES);
     /**
      * How many cells may be loading or building at once. A cell is a read of the map database and some half a
      * millisecond of building, so this is how many the view waits on at once rather than a share of the CPU, and
@@ -707,6 +719,7 @@ public class RecallLod implements RenderTree.Node {
 		if(refresh(e.getKey(), e.getValue())) {
 		    busy++;
 		    flight.put(e.getKey(), e.getValue());
+		    UploadBudget.spend(e.getValue().seen, CELLBYTES);   // a rebuild uploads as a build does
 		}
 	    }
 	}
@@ -850,7 +863,10 @@ public class RecallLod implements RenderTree.Node {
 	if(order != null) {
 	    Collections.sort(order, LEAFORDER);
 	    for(Leaf l : order) {
-		if(busy >= MAXBUSY) {
+		/* And as the frame's uploads let it (UploadBudget): what a cell's build will upload is paid for when it is
+		 * started, so a finished build goes on the GPU and into the scene at once, with nothing held back. Only
+		 * a cell not cached pays: one the view comes back to is drawn as it was (CACHECAP). */
+		if((busy >= MAXBUSY) || !UploadBudget.take(true, CELLBYTES)) {
 		    left = true;
 		    break;
 		}
@@ -864,7 +880,7 @@ public class RecallLod implements RenderTree.Node {
 		kstartat++;   // started meanwhile, by the view
 		continue;
 	    }
-	    if(busy >= MAXBUSY) {
+	    if((busy >= MAXBUSY) || !UploadBudget.take(false, CELLBYTES)) {
 		left = true;
 		break;
 	    }

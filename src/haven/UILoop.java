@@ -807,6 +807,7 @@ public abstract class UILoop implements Console.Directory {
 	    boolean tickwait = (syncmode == SyncMode.FRAME) || (syncmode == SyncMode.TICK);
 
 	    if(!swapsync) out.fence(sync);
+	    io.brodgar.perf.UploadBudget.frame();   // addon: this frame's share of uploads (UploadBudget)
 	    if(!tickwait) syncwait();
 	    ttime = Utils.rtime();
 	    tick();

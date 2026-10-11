@@ -112,6 +112,12 @@
   the first time the environment asks — some 280 KB of the 310 a built leaf is — and make them again from the
   zoom grid if another environment ever does. So a cached leaf costs video memory, and of the heap only the
   zoom grid it keeps anyway ([render-gl.md](render-gl.md), a filler holds what it fills).
+  The cache keeps `CACHEBYTES` (512 MB, some 1,800 leaves) besides what the tick draws and wants: a zoom from the
+  whole map in to the character and back out goes over thousands of leaves, and a cache of a few hundred had
+  every leaf of the whole map built and uploaded again on the way out. A leaf not cached pays for what it will
+  upload when it is **started** (`io.brodgar.perf.UploadBudget`, [render-gl.md](render-gl.md)), and once built
+  goes into the scene at once. ⚠️ Holding a finished leaf back instead is worse than not starting it: the walk
+  does not count it as built, so it draws the coarser leaf above it meanwhile, and asks for that one's zoom grid.
   ⚠️ Ground never recorded is not absent from a zoom grid: `from` fills a missing quarter with
   `DataGrid.nogrid`, tileset `gfx/tiles/notile` at height `0`, and it wins the majority vote like any
   tile — so a coarse cell carries unexplored samples, and their zero enters the min of a mixed block.

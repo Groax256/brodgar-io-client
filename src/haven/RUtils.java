@@ -148,6 +148,11 @@ public class RUtils {
 	public final Supplier<BufferedImage> src;
 	public final int[][] order;
 	private BufferedImage data;
+	/* addon: the faces of level 0, converted by mktex() on the thread that makes the texture -- WaterTile's
+	 * class initialisation, which a worker building a cut with water in it runs -- and not by fill() on the UI
+	 * thread when the texture is first drawn: six faces of the sky cube converted in the frame the first water came
+	 * into view, 80 ms of it. Null when made otherwise, and fill() converts as it did. */
+	private byte[][] faces = null;
 
 	private static final int[][] deforder = {
 	    {3, 1},			// +X
@@ -187,6 +192,11 @@ public class RUtils {
 		data = getsrc(img.tex);
 	    if(img.level == 0) {
 		FillBuffer buf = env.fillbuf(img);
+		byte[][] faces = this.faces;
+		if((faces != null) && (img.w == img.tex.w) && (img.h == img.tex.h)) {
+		    buf.pull(ByteBuffer.wrap(faces[img.face.ordinal()]));
+		    return(buf);
+		}
 		int[] fc = order[img.face.ordinal()];
 		buf.pull(ByteBuffer.wrap(TexI.convert(data, new Coord(img.w, img.h), new Coord(fc[0] * img.tex.w, fc[1] * img.tex.h), new Coord(img.w, img.h))));
 		return(buf);
@@ -196,12 +206,18 @@ public class RUtils {
 
 	public void done() {
 	    data = null;
+	    faces = null;
 	}
 
 	public TextureCube mktex() {
 	    BufferedImage img = Loading.waitfor(src::get);
 	    Coord on = osz();
-	    return(new TextureCube(img.getWidth() / on.x, img.getHeight() / on.y, DataBuffer.Usage.STATIC, new VectorFormat(4, NumberFormat.UNORM8), this));
+	    int w = img.getWidth() / on.x, h = img.getHeight() / on.y;
+	    byte[][] faces = new byte[order.length][];   // addon: see faces
+	    for(int i = 0; i < order.length; i++)
+		faces[i] = TexI.convert(img, new Coord(w, h), new Coord(order[i][0] * w, order[i][1] * h), new Coord(w, h));
+	    this.faces = faces;
+	    return(new TextureCube(w, h, DataBuffer.Usage.STATIC, new VectorFormat(4, NumberFormat.UNORM8), this));
 	}
     }
 

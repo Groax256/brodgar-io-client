@@ -52,6 +52,8 @@ public final class GroundMerge {
 	private final List<FastMesh> owned = new ArrayList<>();
 	/** How many meshes of the cuts went into it, and how many it draws. */
 	public int nsource, ndrawn;
+	/** What the meshes it built upload: their vertex and index buffers, in bytes (io.brodgar.perf.UploadBudget). */
+	public long bytes;
 
 	public void added(RenderTree.Slot slot) {
 	    for(RenderTree.Node p : parts)
@@ -139,6 +141,10 @@ public final class GroundMerge {
 		}
 		FastMesh m = concat(ps.subList(from, to), nv);
 		ret.owned.add(m);
+		for(haven.render.VertexArray.Buffer b : m.model.va.bufs)
+		    ret.bytes += b.size();
+		if(m.model.ind != null)
+		    ret.bytes += m.model.ind.size();
 		ret.parts.add(e.getKey().mat.apply(m));
 		ret.ndrawn++;
 		from = to;

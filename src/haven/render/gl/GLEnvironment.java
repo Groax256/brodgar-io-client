@@ -340,7 +340,9 @@ public abstract class GLEnvironment implements Environment {
 			    BufferBGL xf = new BufferBGL(16);
 			    this.curstate.apply(xf, prep.init);
 			    process(gl, cmd, xf::run);
+			    long pq0 = System.nanoTime();   // addon: the uploads' time (io.brodgar.perf.UploadBudget)
 			    process(gl, cmd, prep.gl::run);
+			    io.brodgar.perf.UploadBudget.rendered(System.nanoTime() - pq0);   // addon:
 			    this.curstate = prep.state;
 			    try {
 				process(gl, cmd, x -> GLException.checkfor(x, this));

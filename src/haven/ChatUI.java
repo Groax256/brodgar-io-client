@@ -1488,18 +1488,29 @@ public class ChatUI extends Widget {
 		return(rname);
 	    }
 
+	    /* addon: scaled on a Defer thread, and Loading until it is -- the one caller, Selector.draw, draws the name
+	     * alone meanwhile. Scaled on the UI thread, every channel's icon was a convolution in the first frame the
+	     * chat was drawn after entering the world: a third of a second of it. */
+	    private Defer.Future<Tex> riconf = null;
+	    private Resource.Image riconof = null;
+
 	    public Tex ricon() {
 		if((ricon == null) || (icon != chan.icon())) {
 		    Resource.Image img = chan.icon();
 		    if(img == null)
 			return(null);
-		    Coord sz;
-		    if(img.sz.x > img.sz.y)
-			sz = Coord.of(iconsz, (iconsz * img.sz.y) / img.sz.x);
-		    else
-			sz = Coord.of((iconsz * img.sz.x) / img.sz.y, iconsz);
-		    ricon = new TexI(PUtils.uiscale(img.img, sz));
+		    if((riconf == null) || (riconof != img)) {
+			Coord sz;
+			if(img.sz.x > img.sz.y)
+			    sz = Coord.of(iconsz, (iconsz * img.sz.y) / img.sz.x);
+			else
+			    sz = Coord.of((iconsz * img.sz.x) / img.sz.y, iconsz);
+			riconof = img;
+			riconf = Defer.later(() -> new TexI(PUtils.uiscale(img.img, sz)));
+		    }
+		    ricon = riconf.get();
 		    icon = img;
+		    riconf = null;
 		}
 		return(ricon);
 	    }

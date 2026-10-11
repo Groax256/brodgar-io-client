@@ -103,6 +103,7 @@ public class SkillWnd extends Widget {
 	public boolean has = false;
 	private String sortkey;
 	private Tex small;
+	private Defer.Future<Tex> smallf = null;   // addon: its build (CredoGrid.crtex)
 
 	private Credo(String nm, Indir<Resource> res, boolean has) {
 	    this.nm = nm;
@@ -213,11 +214,35 @@ public class SkillWnd extends Widget {
 	}
     }
 
+    /* addon: CredoGrid's frames, by size (CredoGrid.credoufr). */
+    private static final Map<Coord, Defer.Future<Tex[]>> credoframes = new HashMap<>();
+
+    private static Defer.Future<Tex[]> credoframes(Coord sz) {
+	synchronized(credoframes) {
+	    return(credoframes.computeIfAbsent(sz, k -> Defer.later(() -> new Tex[] {
+			    new TexI(convolvedown(Resource.loadimg("gfx/hud/chr/yrkirframe"), k, iconfilter)),
+			    new TexI(convolvedown(Resource.loadimg("gfx/hud/chr/yrkirsframe"), k, iconfilter)),
+			})));
+	}
+    }
+
     public class CredoGrid extends Scrollport {
 	public final Coord crsz = UI.scale(70, 88);
 	public final int btnw = UI.scale(100);
-	public final Tex credoufr = new TexI(convolvedown(Resource.loadimg("gfx/hud/chr/yrkirframe"), crsz, iconfilter));
-	public final Tex credosfr = new TexI(convolvedown(Resource.loadimg("gfx/hud/chr/yrkirsframe"), crsz, iconfilter));
+	/* addon: the frames, scaled down on a Defer thread and shared by every grid of that size: this widget is made
+	 * by the Loader thread under the UI's monitor when the world is entered, and scaling them there held the UI
+	 * thread out for a quarter of a second. Null until they are made (frame), and drawn from then on. */
+	public Tex credoufr = null, credosfr = null;
+	private final Defer.Future<Tex[]> framef = credoframes(crsz);
+
+	private Tex frame(boolean sel) {
+	    if((credoufr == null) && framef.done()) {
+		Tex[] f = framef.get();
+		credoufr = f[0];
+		credosfr = f[1];
+	    }
+	    return(sel ? credosfr : credoufr);
+	}
 	public final Text.Foundry prsf = new Text.Foundry(Text.fraktur, 15).aa(true);
 	public final int m = UI.scale(5);
 	public List<Credo> ncr = Collections.emptyList(), ccr = Collections.emptyList();
@@ -248,24 +273,46 @@ public class SkillWnd extends Widget {
 		};
 	}
 
+	/* addon: the credo's picture scaled down on a Defer thread, as the frames are: null until it is made, and the
+	 * credo's place on the grid held by a clear picture of its size meanwhile (CredoImg). */
 	private Tex crtex(Credo cr) {
-	    if(cr.small == null)
-		cr.small = new TexI(convolvedown(cr.res.get().flayer(Resource.imgc).img, crsz, iconfilter));
+	    if(cr.small == null) {
+		if(cr.smallf == null) {
+		    java.awt.image.BufferedImage src = cr.res.get().flayer(Resource.imgc).img;
+		    cr.smallf = Defer.later(() -> new TexI(convolvedown(src, crsz, iconfilter)));
+		}
+		if(!cr.smallf.done())
+		    return(null);
+		cr.small = cr.smallf.get();
+	    }
 	    return(cr.small);
+	}
+	private Tex clear = null;
+	private Tex orclear(Tex t) {
+	    if(t != null)
+		return(t);
+	    if(clear == null)
+		clear = new TexI(TexI.mkbuf(crsz));
+	    return(clear);
 	}
 
 	private class CredoImg extends Img {
 	    private final Credo cr;
 
 	    CredoImg(Credo cr) {
-		super(crtex(cr));
+		super(orclear(crtex(cr)));
 		this.cr = cr;
 		settip(cr.res.get().flayer(Resource.tooltip).t);   // addon: was a pre-rendered Text -- settip follows the "tooltip" scope live (F3d)
 	    }
 
 	    public void draw(GOut g) {
+		Tex t = crtex(cr);   // addon: in place once it is made
+		if((t != null) && (t != img()))
+		    setimg(t);
 		super.draw(g);
-		g.image((cr == sel) ? credosfr : credoufr, Coord.z);
+		Tex fr = frame(cr == sel);   // addon: once it is made
+		if(fr != null)
+		    g.image(fr, Coord.z);
 	    }
 
 	    public boolean mousedown(MouseDownEvent ev) {

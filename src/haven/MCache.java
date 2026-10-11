@@ -61,6 +61,10 @@ public class MCache implements MapSource {
      * only by the next getcut, so a raster that stops asking while nothing changes reads here that a rebuild
      * it started -- an invalidated cut goes on answering its old mesh until then -- has landed. */
     public volatile int meshbuilt = 0;
+    /* addon: and which: the cut coord of every mesh built, logged as meshbuilt counts it, for a raster that takes up
+     * the cuts that moved rather than walk every cut it holds to find them (MapView.RecallTerrain). Null -- nothing
+     * logged -- unless a raster set one. */
+    public volatile java.util.Queue<Coord> builtlog = null;
     /* addon: a cache whose cut meshes nothing lays again -- each let go of its surface and tile data as soon as
      * it is built (MapMesh.lean). The remembered ground's (io.brodgar.session.Recall): its cuts are drawn only
      * through a grid's merged mesh, clicked through their `flat` and stood on through getsurf, and nothing
@@ -464,6 +468,14 @@ public class MCache implements MapSource {
 		return(this.val);
 	    }
 
+	    /* addon: whether a build is in flight, or done and not yet taken up by a get(): what cur() answers is about
+	     * to be replaced. */
+	    public boolean pending() {
+		synchronized(this) {
+		    return(this.def != null);
+		}
+	    }
+
 	    /* addon: 161.2 -- get(), but never the value a pending rebuild is about to replace: while
 	     * one is in flight it throws the build's own NotDoneException, so a Defer task calling this
 	     * reschedules behind it. The flavor build reads the cut's mesh (a served flavor reads its
@@ -555,6 +567,9 @@ public class MCache implements MapSource {
 			    if(lean)
 				ret.lean();   // addon: see lean
 			    meshbuilt++;   // addon: see meshbuilt
+			    java.util.Queue<Coord> log = builtlog;   // addon: see builtlog
+			    if(log != null)
+				log.add(gc.mul(cutn).add(cc));
 			    return(ret);
 			}
 			public void update(MapMesh mesh) {
@@ -1266,6 +1281,18 @@ public class MCache implements MapSource {
 	if((g == null) || g.removed)
 	    return(false);
 	return(g.geticut(cc.mod(cutn)).mesh.cur() != null);
+    }
+
+    /* addon: is this cut's mesh about to be replaced -- a build in flight, or done and not yet taken up by a getcut()?
+     * A plain lookup, as cutbuilt() is: an absent grid answers false. */
+    public boolean cutpending(Coord cc) {
+	Grid g;
+	synchronized(grids) {
+	    g = grids.get(cc.div(cutn));
+	}
+	if((g == null) || g.removed)
+	    return(false);
+	return(g.geticut(cc.mod(cutn)).mesh.pending());
     }
 
     /* addon: (068.1) how many grids this cache would ask the server for the next time sendreqs() ran

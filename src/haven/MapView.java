@@ -1567,60 +1567,102 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    return;
 		Loading curload = null;
 		for(Coord cc : MapRaster.this.walk()) {   // addon: area, unless the raster holds a set of its own
-		    if(MapRaster.this.skipcut(cc)) {   // rts: (F7)
-			Pair<T, RenderTree.Slot> cur = cuts.remove(cc);
-			if(cur != null) {
-			    cur.b.remove();
-			    gen++;   // addon: see gen
-			}
-			continue;
-		    }
-		    try {
-			T cut = getcut(cc);
-			Pair<T, RenderTree.Slot> cur = cuts.get(cc);
-			if((cur == null) || (cur.a != cut)) {
-			    Coord2d pc = cc.mul(MCache.cutsz).mul(tilesz);
-			    RenderTree.Node draw = produce(cut);
-			    Pipe.Op cs = null;
-			    if(position)
-				cs = Location.xlate(new Coord3f((float)pc.x, -(float)pc.y, 0));
-			    RenderTree.Slot added;
-			    try {
-				added = slot.add(draw, cs);
-			    } catch(Loading l) {
-				/* addon: (terrain loading) the add compiles the cut's draw slot, and what stops it is a
-				 * texture not yet prepared -- a small future queued behind every cut build. Urgent: the
-				 * worker Defer keeps for this takes it, and the retry next frame goes through. */
-				l.boostprio(Defer.URGENT);
-				throw(l);
-			    }
-			    cuts.put(cc, new Pair<>(cut, added));
-			    gen++;   // addon: see gen
-			    if(cur != null)
-				cur.b.remove();
-			    if(MapRaster.this.liveground())
-				io.brodgar.addon.AddonManager.groundChanged();   // addon: 044.9 -- a cut's ground entered the scene
-			}
-		    } catch(Loading l) {
-			l.boostprio(MapRaster.this.loadprio(cc));   // addon: 5, unless the raster says otherwise
+		    Loading l = visit(cc);
+		    if(l != null)
 			curload = l;
-		    }
 		}
 		this.lastload = curload;
+		prune();
+	    }
+
+	    /* addon: the cuts put in, swapped or taken out since whoever reads this last emptied it -- null, and nothing
+	     * kept, unless a raster that takes up what moved rather than walk every cut sets one (RecallTerrain). */
+	    Set<Coord> changed = null;
+
+	    private void moved(Coord cc) {
+		gen++;   // addon: see gen
+		if(changed != null)
+		    changed.add(cc);
+	    }
+
+	    /* addon: one cut of tick()'s walk: put in, swapped for the mesh getcut answers now, or taken out where the
+	     * raster skips it. The Loading that stopped it, or null. */
+	    Loading visit(Coord cc) {
+		if(MapRaster.this.skipcut(cc)) {   // rts: (F7)
+		    Pair<T, RenderTree.Slot> cur = cuts.remove(cc);
+		    if(cur != null) {
+			cur.b.remove();
+			moved(cc);
+		    }
+		    return(null);
+		}
+		try {
+		    T cut = getcut(cc);
+		    Pair<T, RenderTree.Slot> cur = cuts.get(cc);
+		    if((cur == null) || (cur.a != cut)) {
+			Coord2d pc = cc.mul(MCache.cutsz).mul(tilesz);
+			RenderTree.Node draw = produce(cut);
+			Pipe.Op cs = null;
+			if(position)
+			    cs = Location.xlate(new Coord3f((float)pc.x, -(float)pc.y, 0));
+			RenderTree.Slot added;
+			try {
+			    added = slot.add(draw, cs);
+			} catch(Loading l) {
+			    /* addon: (terrain loading) the add compiles the cut's draw slot, and what stops it is a
+			     * texture not yet prepared -- a small future queued behind every cut build. Urgent: the
+			     * worker Defer keeps for this takes it, and the retry next frame goes through. */
+			    l.boostprio(Defer.URGENT);
+			    throw(l);
+			}
+			cuts.put(cc, new Pair<>(cut, added));
+			moved(cc);
+			if(cur != null)
+			    cur.b.remove();
+			if(MapRaster.this.liveground())
+			    io.brodgar.addon.AddonManager.groundChanged();   // addon: 044.9 -- a cut's ground entered the scene
+		    }
+		} catch(Loading l) {
+		    l.boostprio(MapRaster.this.loadprio(cc));   // addon: 5, unless the raster says otherwise
+		    return(l);
+		}
+		return(null);
+	    }
+
+	    /* addon: the rest of tick(): every cut held that the raster no longer holds, out. */
+	    void prune() {
 		for(Iterator<Map.Entry<Coord, Pair<T, RenderTree.Slot>>> i = cuts.entrySet().iterator(); i.hasNext();) {
 		    Map.Entry<Coord, Pair<T, RenderTree.Slot>> ent = i.next();
 		    if(!MapRaster.this.holds(ent.getKey())) {   // addon: area.contains, unless as above
 			ent.getValue().b.remove();
 			i.remove();
-			gen++;   // addon: see gen
+			moved(ent.getKey());
 			if(MapRaster.this.liveground())
 			    io.brodgar.addon.AddonManager.groundChanged();   // addon: 044.9 -- ...and one left it
 		    }
 		}
 	    }
 
+	    /* addon: one cut as tick() would leave it, for a raster that knows which of its cuts moved: out if the raster
+	     * no longer holds it, visited otherwise. */
+	    Loading update(Coord cc) {
+		if(!MapRaster.this.holds(cc)) {
+		    Pair<T, RenderTree.Slot> cur = cuts.remove(cc);
+		    if(cur != null) {
+			cur.b.remove();
+			moved(cc);
+			if(MapRaster.this.liveground())
+			    io.brodgar.addon.AddonManager.groundChanged();
+		    }
+		    return(null);
+		}
+		return(visit(cc));
+	    }
+
 	    public void removed(RenderTree.Slot slot) {
 		super.removed(slot);
+		if(changed != null)   // addon: see changed
+		    changed.addAll(cuts.keySet());
 		cuts.clear();
 		gen++;   // addon: see gen
 	    }
@@ -2093,16 +2135,39 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    area = (t == null) ? null : t.area;
 	    /* addon: nothing moved under the drawn raster's cuts this tick (RecallTerrain.idle), and nothing of
 	     * this one's own still to come: nothing to do. */
-	    if((t != null) && t.idle && (grid.lastload == null))
+	    if((t != null) && t.idle && (grid.lastload == null) && t.clickdirty.isEmpty())
 		return;
 	    /* addon: nor when nothing this walk reads has moved since it last ran: the drawn raster's cuts, the live
 	     * raster's and its own (MapRaster.Grid.gen of each) and the grids drawn whole -- a camera panning over ground held
 	     * whole, which is a walk of every cut held spared every tick. */
-	    if((t != null) && grid.inscene() && (grid.lastload == null) && (grid.gen == cmygen) && (t.main.gen == cgen) &&
-	       (terrain.main.gen == clgen) && t.shown.equals(cshown))
+	    boolean same = (t != null) && grid.inscene() && (grid.lastload == null) && (grid.gen == cmygen) &&
+		(terrain.main.gen == clgen) && t.shown.equals(cshown);
+	    if(same && (t.main.gen == cgen) && t.clickdirty.isEmpty())
 		return;
 	    if(area != null) {
-		grid.tick();
+		if(same) {
+		    /* addon: only the drawn raster's cuts moved (RecallTerrain.drain): those are what this walk would find
+		     * moved, and the rest is where the last walk left it. As the frame's uploads let it
+		     * (io.brodgar.perf.UploadBudget): what does not fit is taken up by the next tick. A cut's click mesh
+		     * is about CLICKBYTES. */
+		    Loading last = null;
+		    for(Iterator<Coord> i = t.clickdirty.iterator(); i.hasNext();) {
+			if(!io.brodgar.perf.UploadBudget.room(true))
+			    break;
+			Coord cc = i.next();
+			i.remove();
+			int g0 = grid.gen;
+			Loading l = grid.update(cc);
+			if(l != null)
+			    last = l;
+			if(grid.gen != g0)
+			    io.brodgar.perf.UploadBudget.spend(true, CLICKBYTES);
+		    }
+		    grid.lastload = last;
+		} else {
+		    grid.tick();
+		    t.clickdirty.clear();
+		}
 		if((t != null) && grid.inscene()) {
 		    cmygen = grid.gen;
 		    cgen = t.main.gen;
@@ -2113,6 +2178,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 	private int cgen = -1, clgen = -1, cmygen = -1;
 	private Set<Coord> cshown = null;
+	private static final long CLICKBYTES = 48 * 1024;
 
 	public void added(RenderTree.Slot slot) {
 	    slot.add(grid);
@@ -2214,12 +2280,10 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	private Set<Coord> lastlive = Collections.emptySet();
 	Coord2d center = null;
 	/* addon: the candidates the last whole tick made (every cut of a grid handed over that the source holds and
-	 * can build), and what they were made from: the grids handed over and the source's chseq. `drawgen` moves
-	 * whenever `draw` does. */
+	 * can build), and what they were made from: the grids handed over and the source's chseq. */
 	private List<Coord> cand = Collections.emptyList();
 	private Set<Coord> cgrids = null;
 	private int cchseq = -1;
-	int drawgen = 0;
 	/* addon: what the last whole tick was made from, and whether it left anything to do. A tick that finds all
 	 * of it where it was, nothing it asked for still to come and no mesh built since, has nothing to do, and
 	 * does nothing: every tick of a camera standing or turning, over grids held whole all around it. A mesh
@@ -2240,6 +2304,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	 * what is clickable, what the budgets count -- but a cut's slot draws nothing: the ground is drawn
 	 * a GRID at a time by `merged` below. */
 	final Grid<MapMesh> main = new Grid<MapMesh>() {
+		{changed = new HashSet<>();}   // addon: see drain
 		MapMesh getcut(Coord cc) {
 		    return(map.getcut(cc));
 		}
@@ -2249,6 +2314,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    };
 	RecallTerrain(MCache map) {
 	    super(map);
+	    map.builtlog = new java.util.concurrent.ConcurrentLinkedQueue<>();   // addon: see maintick
 	}
 
 	/* addon: THE GROUND IS DRAWN A GRID AT A TIME. A cut's meshes are a draw call each -- one per
@@ -2283,6 +2349,46 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 	final Map<Coord, Merged> merged = new HashMap<>();
 	long nmerges = 0;   // grids made since the raster was, for `instcensus`
+	/* addon: the merged grids of grids this raster no longer holds, out of the scene and still on the GPU, least
+	 * recently parked first: a zoom in drops a few hundred grids out of what is drawn whole and a zoom back out wants
+	 * them again, and one whose cuts are the very meshes it was made from is put back as it is, with nothing to merge
+	 * or upload. Up to PARKCAP bytes of them; past that, the oldest go. */
+	private static final long PARKCAP = 256L << 20;
+	private final Map<Coord, Merged> parked = new LinkedHashMap<>();
+	private long parkbytes = 0;
+
+	private void park(Coord g, Merged m) {
+	    if(m.slot != null) {
+		m.slot.remove();
+		m.slot = null;
+	    }
+	    Merged old = parked.remove(g);
+	    if(old != null) {
+		parkbytes -= old.node.bytes;
+		old.node.dispose();
+	    }
+	    parked.put(g, m);
+	    parkbytes += m.node.bytes;
+	    for(Iterator<Merged> i = parked.values().iterator(); i.hasNext() && (parkbytes > PARKCAP);) {
+		Merged d = i.next();
+		i.remove();
+		parkbytes -= d.node.bytes;
+		d.node.dispose();
+	    }
+	}
+
+	/* addon: the grid's parked merge if it was made from exactly these cuts, taken out of `parked`; null otherwise,
+	 * and a parked one made from others disposed. */
+	private Merged unpark(Coord g, Map<Coord, MapMesh> cur) {
+	    Merged m = parked.remove(g);
+	    if(m == null)
+		return(null);
+	    parkbytes -= m.node.bytes;
+	    if(samecuts(m.src, cur))
+		return(m);
+	    m.node.dispose();
+	    return(null);
+	}
 	private final Map<Coord, Merged> pending = new HashMap<>();
 	private final Map<Coord, Double> unsettled = new HashMap<>();
 
@@ -2296,37 +2402,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    return(true);
 	}
 
-	/* addon: what mergetick derives from `main.cuts` and the live cuts, kept until either moves (MapRaster.Grid.gen,
-	 * and a live set of other contents): a camera panning over grids held whole moves neither, tick after tick. */
-	private Map<Coord, Map<Coord, MapMesh>> have = new HashMap<>(), mine = new HashMap<>();
-	private int havegen = -1;
-	private Set<Coord> havelive = null;
-	/* addon: and what the last pass went over: whether it found every grid merged already, and what it was made
-	 * with (mergetick's `quiet`). */
-	private boolean mergedall = false;
-	private int mquietgen = -1, mdrawgen = -1;
-	private Set<Coord> mshown = null;
+	/* addon: what mergetick derives from `main.cuts` and the live cuts, per grid: every cut of it held, and of those the
+	 * ones the live raster is not drawing. Kept a grid at a time -- the grids that moved (`mdirty`) -- and never made
+	 * again from every cut held: a ground filling in moves a cut or two a frame out of thousands held. */
+	private final Map<Coord, Map<Coord, MapMesh>> have = new HashMap<>(), mine = new HashMap<>();
+	/* addon: the grids mergetick is to look at again: a cut of it moved (drain), the live raster's share of it moved, it
+	 * came into what is drawn whole or left it, what it is to hold moved (setexpect), or a cut of it was let in. */
+	private final Set<Coord> mdirty = new HashSet<>();
+	/* addon: how many cuts of each grid are let in (`draw`), kept as they are let in. */
+	private final Map<Coord, Integer> want = new HashMap<>();
+	private Set<Coord> mshown = Collections.emptySet();
 
 	/* addon: `live` is the cuts the live raster has in the scene this tick. */
 	private void mergetick(Set<Coord> live) {
 	    if(slot == null)
 		return;
-	    /* addon: what this raster holds of each grid, and of that what it draws: every cut it holds that the
-	     * live raster is not drawing. */
-	    boolean rebuilt = (main.gen != havegen) || !live.equals(havelive);
-	    if(rebuilt) {
-		have = new HashMap<>();
-		mine = new HashMap<>();
-		for(Map.Entry<Coord, Pair<MapMesh, RenderTree.Slot>> e : main.cuts.entrySet()) {
-		    Coord g = e.getKey().div(MCache.cutn);
-		    have.computeIfAbsent(g, k -> new HashMap<>()).put(e.getKey(), e.getValue().a);
-		    if(!live.contains(e.getKey()))
-			mine.computeIfAbsent(g, k -> new HashMap<>()).put(e.getKey(), e.getValue().a);
-		}
-		havegen = main.gen;
-		havelive = live;
-	    }
-	    /* addon: and the grids whose share the live raster has just changed. Each is made again in this very
+	    /* addon: the grids whose share the live raster has just changed. Each is made again in this very
 	     * tick, past MERGEWAIT and past the budget: the frame that sees a cut join the live ground or leave
 	     * it must see this raster give that cut up or take it over, or the cut is drawn twice or not at all.
 	     * The live raster ticks first (MapView.tick), so both land in one frame. A step across a cut
@@ -2341,14 +2432,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    handover.add(cc.div(MCache.cutn));
 	    }
 	    lastlive = live;
-	    /* addon: nothing it reads has moved since a pass that found every grid merged from the cuts it holds now --
-	     * the cuts and the live ones (rebuilt), what is drawn (drawgen), what is shown, what each grid is to
-	     * hold and what is merged (mergegen) -- and nothing waiting: that pass would find the same, grid by grid.
-	     * Only what is shown is put in and taken out (below). */
+	    mdirty.addAll(handover);
+	    /* addon: and the grids drawn whole this tick and not the last, or the other way round: one the far ground stands
+	     * in for is made whole or not at all, and one drawn is made with what it has. */
 	    Set<Coord> shown = this.shown;
-	    boolean quiet = !rebuilt && mergedall && pending.isEmpty() && unsettled.isEmpty() && (mergegen == mquietgen) &&
-		(drawgen == mdrawgen) && shown.equals(mshown);
-	    if(!quiet)
+	    if(!shown.equals(mshown)) {
+		for(Coord g : shown) {
+		    if(!mshown.contains(g))
+			mdirty.add(g);
+		}
+		for(Coord g : mshown) {
+		    if(!shown.contains(g))
+			mdirty.add(g);
+		}
+		mshown = new HashSet<>(shown);
+	    }
+	    if(!mdirty.isEmpty() || !pending.isEmpty() || !unsettled.isEmpty())
 		mergepass(handover, shown);
 	    /* addon: into the scene what is drawn whole this tick, and out of it what is not. One made while it is
 	     * not drawn went in above all the same -- that add is what prepares its materials, and throws while
@@ -2369,53 +2468,89 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    m.slot = null;
 		}
 	    }
-	    if(!quiet)
-		wholepass();
-	    mquietgen = mergegen;
-	    mdrawgen = drawgen;
-	    mshown = shown;
 	}
 
-	/* addon: mergetick's own pass: every grid held made again where its cuts moved, and what waits. `handover`
-	 * is the grids whose share the live raster has just changed, `shown` the grids drawn whole this tick. */
+	/* addon: mergetick's own pass, over the grids that moved and the ones still waiting: each made again where its cuts
+	 * moved. `handover` is the grids whose share the live raster has just changed, `shown` the grids drawn whole this
+	 * tick. */
 	private void mergepass(Set<Coord> handover, Set<Coord> shown) {
-	    Map<Coord, Map<Coord, MapMesh>> have = this.have, mine = this.mine;
-	    Map<Coord, Integer> want = new HashMap<>();
-	    for(Coord cc : draw)
-		want.merge(cc.div(MCache.cutn), 1, Integer::sum);
-	    for(Iterator<Map.Entry<Coord, Merged>> i = merged.entrySet().iterator(); i.hasNext();) {
-		Map.Entry<Coord, Merged> e = i.next();
-		if(!mine.containsKey(e.getKey())) {
-		    e.getValue().drop();
-		    i.remove();
-		    mergegen++;
+	    Set<Coord> todo = new HashSet<>(mdirty);
+	    todo.addAll(pending.keySet());
+	    todo.addAll(unsettled.keySet());
+	    mdirty.clear();
+	    Set<Coord> live = lastlive;
+	    for(Coord g : todo) {
+		Map<Coord, MapMesh> h = null, m = null;
+		Coord ul = g.mul(MCache.cutn);
+		for(int cy = 0; cy < MCache.cutn.y; cy++) {
+		    for(int cx = 0; cx < MCache.cutn.x; cx++) {
+			Coord cc = ul.add(cx, cy);
+			Pair<MapMesh, RenderTree.Slot> c = main.cuts.get(cc);
+			if(c == null)
+			    continue;
+			if(h == null)
+			    h = new HashMap<>();
+			h.put(cc, c.a);
+			if(!live.contains(cc)) {
+			    if(m == null)
+				m = new HashMap<>();
+			    m.put(cc, c.a);
+			}
+		    }
+		}
+		if(h == null)
+		    have.remove(g);
+		else
+		    have.put(g, h);
+		if(m == null) {
+		    mine.remove(g);
+		    Merged d = merged.remove(g);
+		    if(d != null) {
+			park(g, d);
+			mergegen++;
+		    }
+		    Merged p = pending.remove(g);
+		    if(p != null)
+			p.drop();
+		    unsettled.remove(g);
+		} else {
+		    mine.put(g, m);
+		    Merged p = pending.get(g);
+		    if((p != null) && !samecuts(p.src, m)) {
+			p.drop();
+			pending.remove(g);
+		    }
 		}
 	    }
-	    for(Iterator<Map.Entry<Coord, Merged>> i = pending.entrySet().iterator(); i.hasNext();) {
-		Map.Entry<Coord, Merged> e = i.next();
-		if(!mine.containsKey(e.getKey()) || !samecuts(e.getValue().src, mine.get(e.getKey()))) {
-		    e.getValue().drop();
-		    i.remove();
-		}
-	    }
-	    unsettled.keySet().retainAll(mine.keySet());
 	    double now = Utils.rtime();
 	    int budget = MERGES;
-	    boolean all = true;
 	    /* addon: the grids the view wants whole first, so the budget of MERGES goes to the ground on screen. */
 	    final Set<Coord> vis = this.onscreen;
-	    List<Map.Entry<Coord, Map<Coord, MapMesh>>> order = new ArrayList<>(mine.entrySet());
-	    order.sort((a, b) -> Boolean.compare(!vis.contains(a.getKey()), !vis.contains(b.getKey())));
-	    for(Map.Entry<Coord, Map<Coord, MapMesh>> e : order) {
-		Coord g = e.getKey();
-		Map<Coord, MapMesh> cur = e.getValue();
+	    List<Coord> order = new ArrayList<>(todo.size());
+	    for(Coord g : todo) {
+		if(mine.containsKey(g))
+		    order.add(g);
+	    }
+	    order.sort((a, b) -> Boolean.compare(!vis.contains(a), !vis.contains(b)));
+	    for(Coord g : order) {
+		Map<Coord, MapMesh> cur = mine.get(g);
 		int nheld = have.get(g).size();
 		Merged m = merged.get(g);
 		if((m != null) && samecuts(m.src, cur)) {
 		    unsettled.remove(g);
 		    continue;
 		}
-		all = false;
+		if((m == null) && !pending.containsKey(g)) {
+		    /* addon: made from these very cuts before, and parked: back as it is (park). Into the scene, if it is
+		     * drawn, below. */
+		    Merged pk = unpark(g, cur);
+		    if(pk != null) {
+			merged.put(g, pk);
+			mergegen++;
+			unsettled.remove(g);
+			continue;
+		    }
+		}
 		Merged p = pending.get(g);
 		if(p == null) {
 		    /* addon: one the far ground stands in for is made whole or not at all: nothing is to see a
@@ -2431,7 +2566,10 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			boolean complete = nheld >= want.getOrDefault(g, 0);
 			if(!complete && ((now - since) < MERGEWAIT))
 			    continue;
-			if(budget <= 0)
+			/* addon: and as the frame's uploads let it (io.brodgar.perf.UploadBudget), from the view's pool for a
+			 * grid the view wants whole: one that waits is made in a later tick, where it is in the order. Not
+			 * one already drawn whole, which with no merge is a hole. */
+			if((budget <= 0) || (!shown.contains(g) && !io.brodgar.perf.UploadBudget.room(vis.contains(g))))
 			    continue;
 			budget--;
 		    }
@@ -2442,6 +2580,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			cuts.add(new io.brodgar.session.GroundMerge.Cut(ce.getValue(), (float)(d.x * tilesz.x), -(float)(d.y * tilesz.y)));
 		    }
 		    p = new Merged(new HashMap<>(cur), io.brodgar.session.GroundMerge.merge(cuts));
+		    io.brodgar.perf.UploadBudget.spend(vis.contains(g) || shown.contains(g), p.node.bytes);   // addon: what its add below uploads
 		}
 		Coord2d gp = g.mul(MCache.cmaps).mul(tilesz);
 		try {
@@ -2461,26 +2600,34 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		mergegen++;
 		unsettled.remove(g);
 	    }
-	    mergedall = all;
+	    wholepass(todo);
 	}
 
-	/* addon: and which grids are whole now (mergetick). */
-	private void wholepass() {
-	    Map<Coord, Map<Coord, MapMesh>> have = this.have, mine = this.mine;
-	    /* addon: and which grids are whole now: every cut of it that can be built held, and the merged mesh of the
-	     * ones the live raster is not drawing made -- or none left for this raster to draw. */
-	    Set<Coord> wh = new HashSet<>();
-	    for(Map.Entry<Coord, Integer> e : expect.entrySet()) {
-		Coord g = e.getKey();
-		Map<Coord, MapMesh> h = have.get(g);
-		if((h == null) || (h.size() < e.getValue()))
-		    continue;
-		Map<Coord, MapMesh> cur = mine.get(g);
-		Merged m = merged.get(g);
-		if((cur == null) || ((m != null) && samecuts(m.src, cur)))
-		    wh.add(g);
+	/* addon: and which of the grids looked at are whole now: every cut of it that can be built held, and the merged mesh
+	 * of the ones the live raster is not drawing made -- or none left for this raster to draw. */
+	private void wholepass(Set<Coord> todo) {
+	    Set<Coord> wh = null;
+	    for(Coord g : todo) {
+		boolean is = false;
+		Integer e = expect.get(g);
+		if(e != null) {
+		    Map<Coord, MapMesh> h = have.get(g);
+		    if((h != null) && (h.size() >= e)) {
+			Map<Coord, MapMesh> cur = mine.get(g);
+			Merged m = merged.get(g);
+			is = (cur == null) || ((m != null) && samecuts(m.src, cur));
+		    }
+		}
+		if(is != whole.contains(g)) {
+		    if(wh == null)
+			wh = new HashSet<>(whole);
+		    if(is)
+			wh.add(g);
+		    else
+			wh.remove(g);
+		}
 	    }
-	    if(!wh.equals(whole)) {
+	    if(wh != null) {
 		whole = wh;
 		mergegen++;
 	    }
@@ -2529,14 +2676,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    for(Merged m : pending.values())
 		m.node.dispose();
 	    pending.clear();
+	    for(Merged m : parked.values())
+		m.node.dispose();
+	    parked.clear();
+	    parkbytes = 0;
 	    unsettled.clear();
 	    /* addon: and nothing is whole any more, nor drawn: what the far ground asks before this raster ticks again
 	     * (ready), which would otherwise stop standing in for grids this raster no longer has a mesh of. */
 	    whole = Collections.emptySet();
 	    shown = Collections.emptySet();
 	    lastlive = Collections.emptySet();
+	    have.clear();
+	    mine.clear();
+	    mshown = Collections.emptySet();
 	    mergegen++;
 	    settled = false;   // addon: and its next tick is a whole one
+	    mainfull = true;
 	    super.removed(slot);
 	}
 
@@ -2549,6 +2704,24 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	boolean holds(Coord cc) {
 	    return(draw.contains(cc));
 	}
+
+	/* addon: the candidates by grid -- every cut of a grid handed over that the source holds and can build -- the grids
+	 * in the order they are let in, nearest the camera's cut first, and how far into each grid's own list, nearest
+	 * first, the cuts let in reach. */
+	private Map<Coord, List<Coord>> gcuts = Collections.emptyMap();
+	private List<Coord> gorder = Collections.emptyList();
+	private final Map<Coord, Integer> gnext = new HashMap<>();
+	/* addon: the cuts let in whose mesh is not built yet, which the build budget counts; the ones whose last visit met a
+	 * Loading, visited again every tick until one does not; and the ones whose mesh has just been built (MCache.builtlog),
+	 * visited until it is taken up. What a walk of every cut let in found, every tick a cut was on its way. */
+	private final Set<Coord> flying = new LinkedHashSet<>(), retry = new LinkedHashSet<>(), watch = new HashSet<>();
+	/* addon: whether the next tick visits every cut let in -- one was let go, the raster came into the scene, or the
+	 * source or the ground settings moved (a grid filled again, or a setting moved, invalidates a cut only as getcut
+	 * asks for it) -- and what the last one that did was made with. */
+	private boolean mainfull = true;
+	private int mtchseq = -1, mtgen = -1;
+	/* addon: the cuts of `main` that moved since RecallClick last took them up (drain). */
+	final Set<Coord> clickdirty = new HashSet<>();
 
 	void tick() {
 	    Coord2d c = this.center;
@@ -2583,21 +2756,29 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		 * them. Out of the scene, both ticks below return at once. */
 		area = new Area(Coord.z, Coord.z);
 		draw.clear();
+		flying.clear();
+		retry.clear();
+		watch.clear();
+		gnext.clear();
+		for(Coord g : want.keySet())
+		    mdirty.add(g);
+		want.clear();
+		gcuts = Collections.emptyMap();
+		gorder = Collections.emptyList();
 		cand = Collections.emptyList();
 		cgrids = null;
-		drawgen++;
 		wantgrids = Collections.emptySet();
-		expect = Collections.emptyMap();
-		main.tick();
+		setexpect(Collections.emptyMap());
+		mainfull = true;
+		maintick(chseq, gen, Collections.emptyList());
+		drain();
 		mergetick(live);
 		settled = settle(0);
 		return;
 	    }
 	    /* addon: the candidates -- every cut of a grid handed over that the source holds and that can be built --
-	     * made again only when the grids handed over or the ones the source holds (chseq) have moved; and which
-	     * of them to hold (`draw`), only when the candidates moved or the build budget still holds some back. A
-	     * camera panning over grids held whole moves neither, tick after tick, and each was a walk of every cut
-	     * of every grid handed over. */
+	     * made again only when the grids handed over or the ones the source holds (chseq) have moved. A camera
+	     * panning over grids held whole moves neither, tick after tick. */
 	    boolean candnew = !grids.equals(cgrids) || (chseq != cchseq);
 	    if(candnew) {
 		/* In grids rather than in cuts, because grids are the unit the source reads and the margin is
@@ -2630,6 +2811,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			held.add(g);
 		}
 		wantgrids = new HashSet<>(grids);
+		Map<Coord, List<Coord>> gc = new HashMap<>();
 		List<Coord> nc = new ArrayList<>();
 		Map<Coord, Boolean> loaded = new HashMap<>();
 		Map<Coord, Integer> exp = new HashMap<>();
@@ -2649,85 +2831,242 @@ public class MapView extends PView implements DTarget, Console.Directory {
 				continue;
 			    /* addon: a cut the live raster is drawing is held all the same (the class comment above):
 			     * built, and left out of what this raster draws (mergetick). */
+			    gc.computeIfAbsent(g, k -> new ArrayList<>()).add(cc);
 			    nc.add(cc);
 			    exp.merge(g, 1, Integer::sum);
 			}
 		    }
 		}
-		if(!exp.equals(expect))   // addon:
-		    mergegen++;
-		expect = exp;
+		setexpect(exp);
+		gcuts = gc;
 		cand = nc;
 		cgrids = grids;
 		cchseq = chseq;
 	    }
-	    if(candnew || (draw.size() < cand.size())) {
-		final Coord cen = c.floor(tilesz).div(MCache.cutsz);
-		/* addon: sorted again only when the candidates, the grids the view wants or the camera's cut have
-		 * moved (sortcand). */
-		Set<Coord> vis = this.onscreen;
-		if(candnew || !cen.equals(sortcen) || !vis.equals(sortvis)) {
-		    sortcand(cen, vis);
-		    sortcen = cen;
-		    sortvis = vis;
-		}
-		Set<Coord> nd = new LinkedHashSet<>();
-		int building = 0;
-		for(Coord cc : cand) {
-		    if(nd.size() >= recallcutcap(grids.size()))
-			break;
-		    if(!main.cuts.containsKey(cc) && !map.cutbuilt(cc)) {
-			/* Not `break`: a cut already built and still in view is kept whatever the budget
-			 * is, because keeping it costs nothing and dropping it would only have it rebuilt.
-			 * What is counted here is what has been started and has not yet arrived -- a cut
-			 * still building has no entry in `cuts` -- so the budget is a target for how many
-			 * are IN FLIGHT and not a quota for how many may begin in one tick.
-			 *
-			 * 120.4: and what has ALREADY ARRIVED costs nothing to admit, which is why the
-			 * cache is asked and not just `cuts`. A mesh outlives the slot that drew it, so
-			 * every cut this raster had built is still built when it comes back into the tree
-			 * -- and counting those against a target for concurrent BUILDS throttled the one
-			 * case this task exists to make free, letting the ground grow back in over seconds
-			 * where nothing was being built at all. Held grids and built meshes are the same
-			 * promise made twice; a budget may bound what is begun, never what is resumed. */
-			if(building >= recallmaxbuild)
-			    continue;
-			building++;
-		    }
-		    nd.add(cc);
-		}
-		if(!nd.equals(draw))
-		    drawgen++;
-		draw.clear();
-		draw.addAll(nd);
+	    final Coord cen = c.floor(tilesz).div(MCache.cutsz);
+	    if(candnew || !cen.equals(sortcen)) {
+		sortgrids(cen);
+		sortcen = cen;
 	    }
-	    if(!maincurrent(built, chseq, gen, now)) {   // addon:
-		main.tick();
-		mtbuilt = built;
-		mtchseq = chseq;
-		mtgen = gen;
-	    }
+	    List<Coord> admitted = new ArrayList<>();
+	    if(candnew)
+		fullwalk(admitted);
+	    else if(draw.size() < cand.size())
+		admit(admitted);
+	    maintick(chseq, gen, admitted);
+	    drain();
 	    mergetick(live);   // addon:
 	    settled = settle(cand.size());   // addon:
 	}
 
-	/* addon: whether main.tick() would find nothing to do this tick: every cut of `draw` in the scene already --
-	 * so none to add and none to take out, since `cuts` holds exactly `draw` after a tick that met no Loading --
-	 * no cut mesh built within IDLEWAIT of this tick, and the grids and the ground settings where they were (a
-	 * grid filled again, or a setting moved, invalidates a cut only as getcut asks for it). A camera panning over
-	 * grids held whole moves none of it, and the walk of every cut held is spared. Within IDLEWAIT of a build,
-	 * as the idle test above has it, and not only on the tick that first sees one: MCache.meshbuilt counts a
-	 * build before its future is done, and a walk on that tick is answered the rebuilt cut's old mesh. */
-	private int mtbuilt = -1, mtchseq = -1, mtgen = -1;
-	private boolean maincurrent(int built, int chseq, int gen, double now) {
-	    if((main.lastload != null) || (built != mtbuilt) || ((now - tbuiltat) <= IDLEWAIT) || (chseq != mtchseq) || (gen != mtgen) ||
-	       (main.cuts.size() != draw.size()))
-		return(false);
-	    for(Coord cc : draw) {
-		if(!main.cuts.containsKey(cc))
-		    return(false);
+	/* addon: what each grid is to hold to be whole, and the grids whose count moved looked at again (mergetick). */
+	private void setexpect(Map<Coord, Integer> exp) {
+	    if(exp.equals(expect))
+		return;
+	    for(Map.Entry<Coord, Integer> e : exp.entrySet()) {
+		if(!e.getValue().equals(expect.get(e.getKey())))
+		    mdirty.add(e.getKey());
 	    }
-	    return(true);
+	    for(Coord g : expect.keySet()) {
+		if(!exp.containsKey(g))
+		    mdirty.add(g);
+	    }
+	    expect = exp;
+	    mergegen++;
+	}
+
+	/* addon: the cuts let in, made again from the candidates: every one already built or in the scene -- keeping it costs
+	 * nothing and dropping it would only have it rebuilt -- and, in order, as many still to build as the budget has in
+	 * flight. The grids the view wants whole first, then the rest. The cuts let in that were not before go to
+	 * `admitted`; one let go has the next tick visit every cut (mainfull). */
+	private void fullwalk(List<Coord> admitted) {
+	    Set<Coord> nd = new LinkedHashSet<>(), fl = new LinkedHashSet<>();
+	    Map<Coord, Integer> nw = new HashMap<>();
+	    gnext.clear();
+	    for(int pass = 0; pass < 2; pass++) {
+		for(Coord g : gorder) {
+		    if(onscreen.contains(g) != (pass == 0))
+			continue;
+		    List<Coord> l = gcuts.get(g);
+		    int next = -1;
+		    for(int i = 0; i < l.size(); i++) {
+			Coord cc = l.get(i);
+			if(!main.cuts.containsKey(cc) && !map.cutbuilt(cc)) {
+			    /* Not `break`: a cut already built and still in view is kept whatever the budget
+			     * is. What is counted here is what has been started and has not yet arrived -- a cut
+			     * still building has no entry in `cuts` -- so the budget is a target for how many
+			     * are IN FLIGHT and not a quota for how many may begin in one tick.
+			     *
+			     * 120.4: and what has ALREADY ARRIVED costs nothing to admit, which is why the
+			     * cache is asked and not just `cuts`. A mesh outlives the slot that drew it, so
+			     * every cut this raster had built is still built when it comes back into the tree.
+			     * Held grids and built meshes are the same promise made twice; a budget may bound
+			     * what is begun, never what is resumed. */
+			    if(fl.size() >= recallmaxbuild) {
+				if(next < 0)
+				    next = i;
+				continue;
+			    }
+			    fl.add(cc);
+			}
+			nd.add(cc);
+			nw.merge(g, 1, Integer::sum);
+		    }
+		    gnext.put(g, (next < 0) ? l.size() : next);
+		}
+	    }
+	    for(Map.Entry<Coord, Integer> e : nw.entrySet()) {
+		if(!e.getValue().equals(want.get(e.getKey())))
+		    mdirty.add(e.getKey());
+	    }
+	    for(Coord g : want.keySet()) {
+		if(!nw.containsKey(g))
+		    mdirty.add(g);
+	    }
+	    want.clear();
+	    want.putAll(nw);
+	    for(Coord cc : draw) {
+		if(!nd.contains(cc)) {
+		    mainfull = true;
+		    break;
+		}
+	    }
+	    for(Coord cc : nd) {
+		if(!draw.contains(cc))
+		    admitted.add(cc);
+	    }
+	    flying.clear();
+	    flying.addAll(fl);
+	    retry.retainAll(nd);
+	    draw.clear();
+	    draw.addAll(nd);
+	}
+
+	/* addon: the cuts let in since the candidates were last made: as many as the budget has room for now, in the order
+	 * fullwalk has them. A tick of a ground filling in lets in the cut or two that a build finishing made room for,
+	 * and walks nothing else. */
+	private void admit(List<Coord> admitted) {
+	    for(Iterator<Coord> i = flying.iterator(); i.hasNext();) {
+		Coord cc = i.next();
+		if(main.cuts.containsKey(cc) || map.cutbuilt(cc))
+		    i.remove();
+	    }
+	    if(flying.size() >= recallmaxbuild)
+		return;
+	    for(int pass = 0; pass < 2; pass++) {
+		for(Coord g : gorder) {
+		    if(onscreen.contains(g) != (pass == 0))
+			continue;
+		    List<Coord> l = gcuts.get(g);
+		    int i = gnext.getOrDefault(g, 0);
+		    for(; i < l.size(); i++) {
+			Coord cc = l.get(i);
+			if(draw.contains(cc))
+			    continue;
+			if(!main.cuts.containsKey(cc) && !map.cutbuilt(cc)) {
+			    if(flying.size() >= recallmaxbuild) {
+				gnext.put(g, i);
+				return;
+			    }
+			    flying.add(cc);
+			}
+			draw.add(cc);
+			admitted.add(cc);
+			want.merge(g, 1, Integer::sum);
+			mdirty.add(g);
+		    }
+		    gnext.put(g, i);
+		}
+	    }
+	}
+
+	/* addon: `main`'s tick, over the cuts that can have moved: the ones just let in, the ones still loading, and the
+	 * ones whose mesh has just been built (MCache.builtlog). Every cut let in only when one was let go, the raster
+	 * came into the scene, or the source or the ground settings moved (mainfull). */
+	private void maintick(int chseq, int gen, List<Coord> admitted) {
+	    java.util.Queue<Coord> log = map.builtlog;
+	    if(log != null) {
+		for(Coord cc; (cc = log.poll()) != null;) {
+		    if(draw.contains(cc))
+			watch.add(cc);
+		}
+	    }
+	    if(!main.inscene()) {
+		mainfull = true;
+		return;
+	    }
+	    Loading last = null;
+	    if(mainfull || (chseq != mtchseq) || (gen != mtgen)) {
+		retry.clear();
+		for(Coord cc : draw) {
+		    Loading l = main.visit(cc);
+		    if(l != null) {
+			retry.add(cc);
+			last = l;
+		    }
+		}
+		main.prune();
+		mainfull = false;
+		mtchseq = chseq;
+		mtgen = gen;
+	    } else {
+		Set<Coord> touch = new LinkedHashSet<>(retry);
+		touch.addAll(admitted);
+		touch.addAll(watch);
+		for(Coord cc : touch) {
+		    Loading l = main.visit(cc);
+		    if(l != null) {
+			retry.add(cc);
+			last = l;
+		    } else {
+			retry.remove(cc);
+		    }
+		}
+	    }
+	    for(Iterator<Coord> i = watch.iterator(); i.hasNext();) {
+		Coord cc = i.next();
+		if(!draw.contains(cc) || !map.cutpending(cc))
+		    i.remove();
+	    }
+	    main.lastload = last;
+	}
+
+	/* addon: what moved in `main` this tick handed on: to mergetick (the grids of it), to RecallClick (the cuts) and to
+	 * the grids held (heldgrids). */
+	private void drain() {
+	    Set<Coord> ch = main.changed;
+	    if(ch.isEmpty())
+		return;
+	    Set<Coord> gs = new HashSet<>();
+	    for(Coord cc : ch) {
+		clickdirty.add(cc);
+		gs.add(cc.div(MCache.cutn));
+	    }
+	    ch.clear();
+	    mdirty.addAll(gs);
+	    Set<Coord> nh = null;
+	    for(Coord g : gs) {
+		boolean any = false;
+		Coord ul = g.mul(MCache.cutn);
+		for(int cy = 0; !any && (cy < MCache.cutn.y); cy++) {
+		    for(int cx = 0; cx < MCache.cutn.x; cx++) {
+			if(main.cuts.containsKey(ul.add(cx, cy))) {
+			    any = true;
+			    break;
+			}
+		    }
+		}
+		if(any != held.contains(g)) {
+		    if(nh == null)
+			nh = new HashSet<>(held);
+		    if(any)
+			nh.add(g);
+		    else
+			nh.remove(g);
+		}
+	    }
+	    if(nh != null)
+		held = nh;
 	}
 
 	/* addon: whether a tick left nothing to do: every cut it could build admitted and in the scene, none
@@ -2770,43 +3109,34 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    return((dx * dx) + (dy * dy));
 	}
 
-	/* addon: the order the candidates are built in: the grids the view wants whole first, then the rest, each nearest
-	 * the camera's cut first and a grid's cuts together, nearest first -- so the ground on screen comes before what is
-	 * held for a turn of the camera, and each grid comes whole, to be merged and drawn, before the next one starts
-	 * (a cut-by-cut order had every grid half built at once). */
+	/* addon: the order the candidates are let in: the grids nearest the camera's cut first and a grid's cuts together,
+	 * nearest first -- so each grid comes whole, to be merged and drawn, before the next one starts (a cut-by-cut order
+	 * had every grid half built at once). The grids the view wants whole go before the rest as they are let in (admit),
+	 * so a turning camera, which moves which grids those are, sorts nothing. */
 	private Coord sortcen = null;
-	private Set<Coord> sortvis = null;
-	private void sortcand(Coord cen, Set<Coord> vis) {
-	    final class Ord {
-		final Coord cc;
-		final int vis, gx, gy;
-		final long gd, cd;
-
-		Ord(Coord cc, int vis, int gx, int gy, long gd, long cd) {
-		    this.cc = cc; this.vis = vis; this.gx = gx; this.gy = gy; this.gd = gd; this.cd = cd;
-		}
-	    }
+	private void sortgrids(Coord cen) {
 	    Coord half = MCache.cutn.div(2);
-	    List<Ord> ord = new ArrayList<>(cand.size());
-	    for(Coord cc : cand) {
-		Coord g = cc.div(MCache.cutn);
-		ord.add(new Ord(cc, vis.contains(g) ? 0 : 1, g.x, g.y, dist2(g.mul(MCache.cutn).add(half), cen), dist2(cc, cen)));
-	    }
-	    ord.sort((a, b) -> {
-		    if(a.vis != b.vis)
-			return(Integer.compare(a.vis, b.vis));
-		    if(a.gd != b.gd)
-			return(Long.compare(a.gd, b.gd));
-		    if(a.gx != b.gx)
-			return(Integer.compare(a.gx, b.gx));
-		    if(a.gy != b.gy)
-			return(Integer.compare(a.gy, b.gy));
-		    return(Long.compare(a.cd, b.cd));
+	    final Map<Coord, Long> gd = new HashMap<>();
+	    for(Coord g : gcuts.keySet())
+		gd.put(g, dist2(g.mul(MCache.cutn).add(half), cen));
+	    List<Coord> go = new ArrayList<>(gcuts.keySet());
+	    go.sort((a, b) -> {
+		    int r = Long.compare(gd.get(a), gd.get(b));
+		    if(r != 0)
+			return(r);
+		    if(a.x != b.x)
+			return(Integer.compare(a.x, b.x));
+		    return(Integer.compare(a.y, b.y));
 		});
-	    List<Coord> nc = new ArrayList<>(ord.size());
-	    for(Ord o : ord)
-		nc.add(o.cc);
-	    cand = nc;
+	    gorder = go;
+	    for(Map.Entry<Coord, List<Coord>> e : gcuts.entrySet()) {
+		List<Coord> l = e.getValue();
+		l.sort((a, b) -> Long.compare(dist2(a, cen), dist2(b, cen)));
+		int i = 0;
+		while((i < l.size()) && draw.contains(l.get(i)))
+		    i++;
+		gnext.put(e.getKey(), i);
+	    }
 	}
 
 	/* addon: a cut of a grid the view wants whole is asked for as the live terrain's are; one held ahead of the view --
@@ -2827,18 +3157,12 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	 * wanted, or asked for -- is the authority: a grid dropped under one of these entries would dispose
 	 * the very mesh its slot goes on drawing. Read after main.tick() has run, so it is this tick's. */
 	Set<Coord> heldgrids() {
-	    /* addon: the same set while `cuts` has not moved (MapRaster.Grid.gen) -- and so the same object, which the
+	    /* addon: kept a grid at a time as cuts move (drain) -- and so the same object while none of it moves, which the
 	     * source takes as nothing new (Recall.want), as it does the wanted grids, made anew only when they change. */
-	    if((held != null) && (main.gen == heldgen))
-		return(held);
-	    Set<Coord> out = new HashSet<>();
-	    for(Coord cc : main.cuts.keySet())
-		out.add(cc.div(MCache.cutn));
-	    heldgen = main.gen;
-	    return(held = out);
+	    drain();
+	    return(held);
 	}
-	private Set<Coord> held = null;
-	private int heldgen = -1;
+	private Set<Coord> held = Collections.emptySet();
 
 	/* addon: how many cuts this raster draws of what it holds: of the candidates, every one of a grid drawn whole
 	 * that the live raster is not drawing. Asked by :recall and the profiler alone, so counted when asked, and
@@ -2867,6 +3191,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    /* addon: and it has taken nothing up in the scene yet, whatever its last tick out of it settled on: that one
 	     * (droprecall) emptied it over the grids it was handed then, which the far ground hands over again. */
 	    settled = false;
+	    mainfull = true;
 	}
     }
 

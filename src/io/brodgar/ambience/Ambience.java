@@ -1476,7 +1476,10 @@ public class Ambience {
 		memo = Arrays.copyOf(memo, Math.max(t + 1, memo.length * 2));
 	    if(memo[t] == 0) {
 		Tileset set = map.tileset(t);
-		boolean v = (set != null) && (VOID.equals(set.getres().name) || (map.tiler(t) instanceof haven.resutil.CaveTile));
+		/* The tileset's factory, and not the tiler it makes: making one is the tiler's class initialised, and
+		 * some load resources there and wait for them -- WaterTile's, two textures -- on this, the UI thread:
+		 * the first grid with water in it after login held one frame for over half a second. */
+		boolean v = (set != null) && (VOID.equals(set.getres().name) || (set.tfac() instanceof haven.resutil.CaveTile.Factory));
 		memo[t] = (byte)(v ? 1 : 2);
 	    }
 	    if(memo[t] == 1)

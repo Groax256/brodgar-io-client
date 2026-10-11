@@ -408,12 +408,27 @@ public interface Lighting {
 		c.addlight(i, lights[i]);
 	    c.compact();
 	    Debug.statprint(Utils.formatter("C-lights: %d lists, max %d, bounds %s, cell %s", c.nlists, c.maxlist, c.bbox, c.gsz), stats);
-	    if(last != null) {
-		last.dispose();
-		last = null;
+	    /* addon: the cell lists as they were last time -- a camera standing still while a light flickers moves the
+	     * lights' data and nothing of where they reach -- keep the texture they were uploaded in: the grid's half
+	     * megabyte is uploaded only when it changes, and the light data, a few hundred bytes, every time. */
+	    boolean same = (last != null) && (c.lboff == llen) && Arrays.equals(c.grid, lgrid) &&
+		Arrays.equals(Arrays.copyOf(c.listbuf, c.lboff), llists);
+	    GridLights prev = last;
+	    last = new GridLights(lights, c.bbox, c.grid, c.listbuf, c.lboff, same ? prev.lstex : null);
+	    if(prev != null) {
+		prev.ldtex.dispose();
+		if(!same)
+		    prev.lstex.dispose();
 	    }
-	    return(last = new GridLights(lights, c.bbox, c.grid, c.listbuf, c.lboff));
+	    if(!same) {
+		lgrid = c.grid;
+		llists = Arrays.copyOf(c.listbuf, c.lboff);
+		llen = c.lboff;
+	    }
+	    return(last);
 	}
+	private short[] lgrid = null, llists = null;
+	private int llen = -1;
 
 	private static final Uniform u_bboxm = new Uniform(VEC3, "lboxm", p -> ((GridLights)p.get(lights)).bboxm(), lights);
 	private static final Uniform u_bboxk = new Uniform(VEC3, "lboxk", p -> ((GridLights)p.get(lights)).bboxk(), lights);
@@ -521,9 +536,14 @@ public interface Lighting {
 	    public final Volume3f bbox;
 
 	    public GridLights(Object[][] lights, Volume3f bbox, short[] grid, short[] lists, int listlen) {
+		this(lights, bbox, grid, lists, listlen, null);
+	    }
+
+	    /* addon: `lstex`, when not null, is the previous compile's cell lists, unchanged (compile). */
+	    GridLights(Object[][] lights, Volume3f bbox, short[] grid, short[] lists, int listlen, Texture2D.Sampler2D lstex) {
 		this.bbox = bbox;
 		this.ldtex = new Texture2D.Sampler2D(lighttex(lights));
-		this.lstex = new Texture2D.Sampler2D(listtex(grid, lists, listlen));
+		this.lstex = (lstex != null) ? lstex : new Texture2D.Sampler2D(listtex(grid, lists, listlen));
 	    }
 
 	    private Texture2D listtex(short[] grid, short[] lists, int listlen) {

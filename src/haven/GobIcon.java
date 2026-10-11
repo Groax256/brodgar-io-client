@@ -114,11 +114,21 @@ public class GobIcon extends GAttrib {
 	    this.z = Utils.iv(rimg.info.getOrDefault("mm/z", rimg.z));
 	}
 
+	/* addon: built on a Defer thread, and Loading until it is: an icon larger than the minimap's own size is
+	 * blurred and convolved down, tens of milliseconds an icon on the UI thread, and the first minimap tick after
+	 * entering the world built every kind of icon in sight in one frame -- about 300 ms of it. Every caller of
+	 * GobIcon.icon() already takes Loading as "not yet", and the icon is drawn a few frames later. */
+	private static final Map<Resource, Defer.Future<Image>> building = new WeakHashMap<>();
+
 	public static Image get(Resource res) {
 	    synchronized(cache) {
 		Image img = cache.get(res);
 		if(img == null) {
-		    img = new Image(res);
+		    Defer.Future<Image> f = building.get(res);
+		    if(f == null)
+			building.put(res, f = Defer.later(() -> new Image(res)));
+		    img = f.get();
+		    building.remove(res);
 		    cache.put(res, img);
 		}
 		return(img);
