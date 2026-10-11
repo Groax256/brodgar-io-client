@@ -75,6 +75,7 @@ public class LoginWarmup {
 	    preloadhud();
 	    haven.render.gl.ProgramCache.preload();   // the programs the last session's first frames compiled
 	    initclasses();
+	    preloadmap();
 	    RichText.render("warm-up", 100);
 	    MCache mc = new MCache(null);
 	    for(int i = 0; i < tilesets.length; i++)
@@ -114,6 +115,22 @@ public class LoginWarmup {
      * labels draw with it) and the sky pass's. Initialised here instead; one that cannot be is a line on stderr
      * and the world pays for it as before. */
     private static final String[] classes = {"haven.FastText", "io.brodgar.ambience.SkyPass"};
+
+    /* The map file the last session read (GameUI.addchild records its name), read now: MapFile.load keeps it for
+     * the process, and reading it is every marker it holds -- done by the Loader thread under the new session's UI
+     * monitor when the world is entered, 40-100 ms the frame waited on. A session that names another file reads
+     * that one as before; one entered while this is still reading waits for it, as it would have read it itself. */
+    private static void preloadmap() {
+	String nm = Utils.getpref("mapfile/last", null);
+	ResCache store = GameUI.mapstore();
+	if((nm == null) || (store == null))
+	    return;
+	try {
+	    MapFile.load(store, nm);
+	} catch(Throwable e) {
+	    System.err.println("Login warm-up: could not read the map file " + nm + ": " + e);
+	}
+    }
 
     private static void initclasses() {
 	for(String nm : classes) {

@@ -901,6 +901,16 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	}
     }
 
+    /* addon: where the map file is kept: ResCache.global's, or haven.mapbase's directory -- which means nothing to the
+     * SQLite store, where the map is ResCache.global's file. One answer for the session (addchild) and the login
+     * screen's warm-up. */
+    public static ResCache mapstore() {
+	ResCache mapstore = ResCache.global;
+	if((MapFile.mapbase.get() != null) && !io.brodgar.addon.SqliteCache.sqlite())
+	    mapstore = HashDirCache.get(MapFile.mapbase.get());
+	return(mapstore);
+    }
+
     private String mapfilename() {
 	StringBuilder buf = new StringBuilder();
 	buf.append(genus);
@@ -1001,13 +1011,17 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		ui.destroy(mapfile);
 		mapfile = null;
 	    }
-	    ResCache mapstore = ResCache.global;
-	    if((MapFile.mapbase.get() != null) && !io.brodgar.addon.SqliteCache.sqlite()) // addon: haven.mapbase (set by every shipped haven-config.properties) means nothing to the SQLite store: the map is ResCache.global's file
-		mapstore = HashDirCache.get(MapFile.mapbase.get());
+	    ResCache mapstore = mapstore();
 	    if(mapstore != null) {
 		MapFile file;
 		try {
-		    file = MapFile.load(mapstore, mapfilename());
+		    String fnm = mapfilename();
+		    /* addon: the name, for the login screen's warm-up to read the file before the next session's
+		     * world is entered (LoginWarmup.preloadmap) -- read here, it is every marker the file holds,
+		     * on the Loader thread under this UI's monitor, which the frame waits on. */
+		    if(!fnm.equals(Utils.getpref("mapfile/last", null)))
+			Utils.setpref("mapfile/last", fnm);
+		    file = MapFile.load(mapstore, fnm);
 		} catch(java.io.IOException e) {
 		    /* XXX: Not quite sure what to do here. It's
 		     * certainly not obvious that overwriting the
