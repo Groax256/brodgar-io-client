@@ -73,6 +73,7 @@ public class LoginWarmup {
 	long t0 = System.currentTimeMillis();
 	try {
 	    preloadhud();
+	    haven.render.gl.ProgramCache.preload();   // the programs the last session's first frames compiled
 	    RichText.render("warm-up", 100);
 	    MCache mc = new MCache(null);
 	    for(int i = 0; i < tilesets.length; i++)

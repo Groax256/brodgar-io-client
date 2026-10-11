@@ -76,6 +76,13 @@ public class BackCache<K, V> {
 	return(ret);
     }
 
+    /* addon: into the cache alone, unless it holds the key already -- a value loaded elsewhere (MiniMap.segment),
+     * which put() would store back where it was just read from. */
+    public void offer(K key, V val) {
+	if(!cache.containsKey(key))
+	    cache.put(key, val);
+    }
+
     public void put(K key, V val) {
 	store.accept(key, val);
 	cache.put(key, val);

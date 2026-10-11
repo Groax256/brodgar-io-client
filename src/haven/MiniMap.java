@@ -99,6 +99,38 @@ public class MiniMap extends Widget {
 	Location locate(MapFile file) throws Loading;
     }
 
+    /* addon: a segment of the map file, read on a Defer thread and Loading until it is, then cached as
+     * MapFile.segments.get would have cached it. Reading one is its whole grid index -- every grid it has ever
+     * recorded, tens of thousands on a well-walked map -- and the locators below asked for it from MiniMap.tick,
+     * on the UI thread, the first frames in the world: 60-120 ms of one frame. Called under the file's read lock,
+     * as get() is (resolve); the read takes its own, and puts nothing in the cache from its thread -- BackCache is
+     * not a concurrent map, and put() would store the segment back. */
+    private static final Map<MapFile, Map<Long, Defer.Future<Segment>>> segloads = new WeakHashMap<>();
+
+    static Segment segment(MapFile file, long id) {
+	if(file.segments.cached(id))
+	    return(file.segments.get(id));
+	Defer.Future<Segment> f;
+	synchronized(segloads) {
+	    f = segloads.computeIfAbsent(file, k -> new HashMap<>()).computeIfAbsent(id, k -> Defer.later(() -> {
+			file.lock.readLock().lock();
+			try {
+			    return(file.segments.load.apply(id));
+			} finally {
+			    file.lock.readLock().unlock();
+			}
+		    }));
+	}
+	Segment seg = f.get();
+	synchronized(segloads) {
+	    Map<Long, Defer.Future<Segment>> fl = segloads.get(file);
+	    if(fl != null)
+		fl.remove(id);
+	}
+	file.segments.offer(id, seg);
+	return(file.segments.get(id));
+    }
+
     public static class SessionLocator implements Locator {
 	public final Session sess;
 	private MCache.Grid lastgrid = null;
@@ -127,7 +159,7 @@ public class MiniMap extends Widget {
 		GridInfo info = file.gridinfo.get(grid.id);
 		if(info == null)
 		    continue;
-		Segment seg = file.segments.get(info.seg);
+		Segment seg = segment(file, info.seg);   // addon: off the UI thread (segment)
 		if(seg != null) {
 		    Location ret = new Location(seg, info.sc.sub(grid.gc).mul(cmaps));
 		    lastgrid = grid;
@@ -152,7 +184,7 @@ public class MiniMap extends Widget {
 	    GridInfo info = file.gridinfo.get(plg.id);
 	    if(info == null)
 		throw(new Loading("No grid info, probably coming soon"));
-	    Segment seg = file.segments.get(info.seg);
+	    Segment seg = segment(file, info.seg);   // addon: off the UI thread (segment)
 	    if(seg == null)
 		throw(new Loading("No segment info, probably coming soon"));
 	    return(new Location(seg, info.sc.mul(cmaps).add(mc.sub(plg.ul))));

@@ -34,8 +34,12 @@
   - `gridinfo`, `BackCache(100)`: grid id → `GridInfo{id, seg, sc}`, one tiny file per
     grid. **The only bridge from a server grid id into the database**, and it needs no grid data.
   - `segments`, `BackCache(5)`: segment id → `Segment`. Loading one is a **synchronous** file
-    read (small: just the coord → grid-id map). Only five live at once, so the same segment comes back as
-    a *different object* after an eviction — never intern on its Java identity.
+    read of its whole coord → grid-id map — tens of thousands of entries on a well-walked map, 60–120 ms. Only
+    five live at once, so the same segment comes back as a *different object* after an eviction — never intern
+    on its Java identity. ⚠️ The minimap's locators asked for it from `MiniMap.tick`, on the UI thread, the first
+    frames in the world. Fork: `MiniMap.segment` reads it on a `Defer` thread (its own read lock, the cache's own
+    `load`) and answers `Loading` until it is, then puts it in the cache with `BackCache.offer` — cache only,
+    since `put` stores the value back, and nothing touches the map from the reading thread
 
 ## Segments, grids, markers
 

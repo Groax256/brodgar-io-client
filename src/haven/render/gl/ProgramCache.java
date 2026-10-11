@@ -25,7 +25,10 @@ import haven.Config;
  * sources (GLProgram.build), never on the GL thread; a fresh binary is fetched on the GL thread right after the
  * link (a memcpy) and written by a thread of this class's own. Off where the driver reports no binary format
  * (Caps.progbinfmts), where no root was set (setroot -- Client.setupres names savedata/shaders/), or with
- * -Dhaven.progcache=false. A cache: delete the folder and the next login rebuilds it. */
+ * -Dhaven.progcache=false. A cache: delete the folder and the next login rebuilds it.
+ *
+ * And what a session loads is listed (the warm list, below), so the next one reads those binaries into memory
+ * before the world is entered (preload, from LoginWarmup) rather than one file at a time on the UI thread. */
 public class ProgramCache {
     public static final Config.Variable<Boolean> enabled = Config.Variable.propb("haven.progcache", true);
     private static final int MAGIC = 0x48504231;   // "HPB1"
@@ -36,6 +39,21 @@ public class ProgramCache {
     private static boolean warned = false;
     /* What a session did: read by nothing yet, kept for the day :stats wants them. */
     public static volatile int hits = 0, misses = 0, rejects = 0;
+
+    /* The warm list: every program this session loaded, by "folder/key", in the order each was first asked for --
+     * written to WARM under the root as it grows -- and what preload() read back of the last session's list
+     * before the world was entered. A program's binary is a file read on the thread that builds the program,
+     * which entering the world is the UI thread for the hundred or so programs its first frames compile: read
+     * here from memory instead. The folder is in the name, so a driver update reads nothing stale. */
+    private static final String WARM = "warm.txt";
+    private static final long WARMCAP = 64L << 20;
+    private static final double WARMWAIT = 5;
+    private static final Set<String> used = Collections.synchronizedSet(new LinkedHashSet<String>());
+    private static final Map<String, Entry> preloaded = new ConcurrentHashMap<String, Entry>();
+    private static double warmat = 0, firsttake = 0;
+    private static boolean warmpending = false;
+    /* What preload() read that nothing took within this long of the first that was taken goes. */
+    private static final double PRELOADKEEP = 60;
 
     public static class Entry {
 	public final int format;
@@ -95,7 +113,25 @@ public class ProgramCache {
     public static Entry load(GLEnvironment env, String key) {
 	if(!active(env))
 	    return(null);
-	Path f = file(env, key);
+	String name = dir(env).getFileName() + "/" + key;
+	Entry ret = null;
+	if(!preloaded.isEmpty()) {   // addon: the warm list
+	    double now = haven.Utils.rtime();
+	    if((ret = preloaded.remove(name)) != null) {
+		if(firsttake == 0)
+		    firsttake = now;
+	    } else if((firsttake != 0) && ((now - firsttake) > PRELOADKEEP)) {
+		preloaded.clear();
+	    }
+	}
+	if(ret == null)
+	    ret = read(file(env, key));
+	if(ret != null)
+	    warmed(name);
+	return(ret);
+    }
+
+    private static Entry read(Path f) {
 	try(DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(f)))) {
 	    if(in.readInt() != MAGIC)
 		return(null);
@@ -113,6 +149,71 @@ public class ProgramCache {
 	    return(null);
 	} catch(IOException e) {
 	    return(null);
+	}
+    }
+
+    /* A program this session loaded, onto the warm list; the list written by the writer thread at most every
+     * WARMWAIT, with everything added meanwhile. */
+    private static void warmed(String name) {
+	if(!used.add(name))
+	    return;
+	synchronized(used) {
+	    if(warmpending)
+		return;
+	    warmpending = true;
+	}
+	final Path f = root.resolve(WARM);
+	enqueue(() -> {
+		double wait = warmat + WARMWAIT - haven.Utils.rtime();
+		if(wait > 0) {
+		    try {
+			Thread.sleep((long)(wait * 1000));
+		    } catch(InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return;
+		    }
+		}
+		List<String> list;
+		synchronized(used) {
+		    warmpending = false;
+		    warmat = haven.Utils.rtime();
+		    list = new ArrayList<String>(used);
+		}
+		Path tmp = f.resolveSibling(WARM + ".tmp");
+		try {
+		    Files.createDirectories(f.getParent());
+		    Files.write(tmp, list, haven.Utils.utf8);
+		    Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+		} catch(IOException e) {
+		    try {Files.deleteIfExists(tmp);} catch(IOException e2) {}
+		    warn("could not write " + f + ": " + e);
+		}
+	    });
+    }
+
+    /* The last session's warm list read into memory, up to WARMCAP, on the thread that calls this -- before the
+     * world is entered (LoginWarmup). A program it names that no longer exists is skipped; one never asked for this
+     * session costs its memory until then. */
+    public static void preload() {
+	Path r = root;
+	if(!enabled.get() || (r == null))
+	    return;
+	List<String> list;
+	try {
+	    list = Files.readAllLines(r.resolve(WARM), haven.Utils.utf8);
+	} catch(IOException e) {
+	    return;
+	}
+	long total = 0;
+	for(String name : list) {
+	    if((name.indexOf('/') < 0) || name.contains("..") || preloaded.containsKey(name))
+		continue;
+	    Entry e = read(r.resolve(name + ".bin"));
+	    if(e == null)
+		continue;
+	    preloaded.put(name, e);
+	    if((total += e.data.limit()) > WARMCAP)
+		break;
 	}
     }
 
