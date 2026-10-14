@@ -42,7 +42,7 @@
       `[manual]`: drag a macro to a slot, log out and back in — expect it in that slot.
       `[manual]`: with a macro on a slot, `:reload` — expect it still there.
 
-- [ ] **174.4 — An addon's own bar takes a macro.** A bar an addon draws in place of the client's receives
+- [x] **174.4 — An addon's own bar takes a macro.** A bar an addon draws in place of the client's receives
       the drag as its `Drop`, and must place, draw and release the macro. `LuaSlot.hold`: a string
       `macro/<id>` naming an existing macro holds the slot for it (`BeltHold`, a `MacroPagina` on that
       character's bar), unprotected like the drag; a deleted or unknown id is refused naming it; every other

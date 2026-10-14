@@ -1,6 +1,6 @@
 # session:actionbar: The Action Bar
 
-One character's action bar (the F-key and number-key hotbar), read, activated and written through its [session](session.md). `session:actionbar()` is that character's bar, and a slot can be held for one of your own [menu entries](menugrid.md#write-unprotected) or, by the player, for one of their [macros](#a-macro-on-a-slot).
+One character's action bar (the F-key and number-key hotbar), read, activated and written through its [session](session.md). `session:actionbar()` is that character's bar, and a slot can be held for one of your own [menu entries](menugrid.md#write-unprotected) or for one of the player's [macros](#a-macro-on-a-slot).
 
 ```lua
 local session = hafen.session():current()                      -- the character on screen
@@ -111,6 +111,7 @@ session:actionbar():get(11):hold(dig_entry)            -- the entry now draws in
 |---|---|---|---|
 | `slot:hold()` | `Pagina \| nil` | Unprotected | The entry this slot is held for. `nil` for every slot the server owns, a slot holding one of the game's own actions included (`slot:res()` names that, [`session:menugrid():get(name)`](menugrid.md) is its `Pagina`). `nil` on a slot held for a [macro](#a-macro-on-a-slot) too. |
 | `slot:hold(pagina)` | the `Slot` | Unprotected | Hold this slot for an entry an addon added to that character's menu, yours or another's. |
+| `slot:hold(macro_res)` | the `Slot` | Unprotected | Hold this slot for the player's macro `macro_res` names, `macro/<id>`, as the drag from the Macros page does ([placing one from a `Drop`](#placing-one-from-a-drop)). |
 | `slot:hold(nil)` | the `Slot` | Unprotected | End the hold, whoever took it, a macro's included. Inert on a slot nobody holds. |
 
 | Rule | Detail |
@@ -127,7 +128,8 @@ session:actionbar():get(11):hold(dig_entry)            -- the entry now draws in
 | `slot:hold(pagina)` for one of the game's own entries | That it is the client's own entry, pointing at `slot:res(name)`. |
 | `slot:hold(pagina)` for an entry you removed | That the entry is no longer in the menu. |
 | `slot:hold(pagina)` for an entry another addon removed | Not in that character's menu, naming that addon. |
-| `slot:hold(7)`, `slot:hold("dig")` | Expected the `Pagina` object, or `nil`. |
+| `slot:hold(7)`, `slot:hold("dig")` | Expected the `Pagina` object, a macro's `macro/<id>`, or `nil`. |
+| `slot:hold("macro/<id>")` for a deleted or unknown macro | That there is no such macro, naming that `macro/<id>`. |
 | `slot:res("addon/myaddon/dig")` | That it is an entry an addon added, pointing back at `slot:hold`. |
 | `slot:res("macro/3")` | That it is one of the player's macros, which goes on the bar by the drag from the Macros page. |
 
@@ -165,7 +167,7 @@ end)                                         -- if it was on that bar, it is on 
 
 ## A macro on a slot
 
-The player's [macros](../macros.md) stand on the bar as an entry does: the player drags one from the Macros page onto a slot, and the client holds the slot for it. Your addon reads such a slot, presses it and can release it. Only the player puts one there.
+The player's [macros](../macros.md) stand on the bar as an entry does: the player drags one from the Macros page onto a slot, and the client holds the slot for it. Your addon reads such a slot, presses it and can release it, and places one with `slot:hold("macro/<id>")`: that is how [a bar you draw](#placing-one-from-a-drop) takes the player's drag.
 
 ```lua
 for _, slot in ipairs(hafen.session():current():actionbar():list("macro/")) do
@@ -189,7 +191,33 @@ end
 | No addon's | A `:reload`, or your addon disabled, leaves a macro's slot standing. |
 | Endings | [When a hold ends](#when-a-hold-ends) holds for a macro. Deleting the macro on its page is one more ending: every slot it stands in goes back to the server's content, and the record is forgotten on every character. |
 | Remembered | Per character, in the same record as the entries: the macro is back in its slot at the next world entry and after a `:reload`. Renaming it or editing its body keeps every slot. |
-| Refused | `slot:res("macro/<id>")` raises naming the drag from the Macros page, before the permission is asked. |
+| Refused | `slot:res("macro/<id>")` raises naming the drag from the Macros page, before the permission is asked. `slot:hold("macro/<id>")` for a macro that no longer exists raises naming it. |
+
+### Placing one from a `Drop`
+
+A bar your addon draws in place of the client's receives the player's drag as a widget's [`Drop`](ui/custom.md#drop-makes-a-widget-a-drop-target), `res` `macro/<id>`. Placing it, drawing it and releasing it are yours: `slot:hold(res)` holds the slot, [`g:resource(res, ...)`](ui/drawing.md#images) draws the macro's icon, `slot:hold(nil)` takes it off.
+
+```lua
+local session = hafen.session():current()
+local slot = session:actionbar():get(13)
+local button = hafen.ui():widget():parent(session:ui():match("@GameUI")):size(34, 34)
+button:on("Drop", function(drop_event)
+  local dropped = drop_event:thing().res
+  if dropped and dropped:sub(1, 6) == "macro/" then
+    drop_event:preventDefault()
+    slot:hold(dropped)                                     -- the macro now stands in slot 13
+  end
+end)
+button:on("Draw", function(draw_event)
+  if slot:res() then draw_event:g():resource(slot:res(), 1, 1, 32, 32) end   -- a macro's res draws its icon
+end)
+```
+
+| Rule | Detail |
+|---|---|
+| As the drag | The slot is held exactly as the drag onto the client's own bar holds it: unprotected, nothing sent, `ActionbarChanged` on both edges, remembered per character. |
+| A right-click on your bar | Is yours to handle. End a macro's slot with `slot:hold(nil)`: `slot:clear()` clears the server's content under it. `slot:hold()` is `nil` there, so test `slot:res()` for `macro/`. |
+| Pressing | `slot:use()` runs the macro, as its key does (`actionbar.use`). |
 
 ---
 

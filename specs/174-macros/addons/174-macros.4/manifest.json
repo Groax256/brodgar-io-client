@@ -1,0 +1,10 @@
+{
+  "name": "174.4 — an addon's own bar takes a macro",
+  "id": "174-macros.4",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 174.4: a macro dropped on an addon's own Drop square is held on its slot with slot:hold(res), reads as macro/<id> with its name, draws its icon through g:resource, is released by slot:hold(nil), and an unknown, deleted or non-macro string is refused.",
+  "api_version": "1.0",
+  "permissions": ["widget.value"],
+  "files": ["main.lua"]
+}

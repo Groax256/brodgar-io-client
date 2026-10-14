@@ -70,7 +70,8 @@ import java.util.Map;
  * addon added to that character's menu — any addon's — on the bar, which reaches no server and needs no more
  * permission than drawing a HUD overlay does. It is not an assignment but a <b>hold</b> — see {@link BeltHold} — so it lands immediately
  * where {@code :res(name)} round-trips the server, and the slot's own content comes back untouched when the
- * hold ends. A held slot reads as the entry throughout: {@code :res()} answers the {@code addon/…} identity
+ * hold ends. {@code :hold("macro/<id>")} holds it for one of the player's macros, as the drag does (174). A held
+ * slot reads as the entry throughout: {@code :res()} answers the {@code addon/…} identity
  * ({@link CharApi#actionbarRes}), {@code :empty()} is false, and {@code ActionbarChanged} fires on both edges.
  *
  * <p><b>Threading.</b> Every read/write runs on the UI thread (addon tick / REPL / timer / console command);
@@ -366,11 +367,19 @@ public final class LuaSlot {
                     BeltHold.release(h.user, h.index);
                     return self;
                 }
+                // 174: a macro's identity, the res a Drop hands a bar an addon draws in place of the client's.
+                // The bar has to be able to do what the drag onto the client's own bar does, and a macro has no
+                // Pagina an addon could hold; like the drag, it reaches no server and is unprotected.
+                if((v.type() == LuaValue.TSTRING) && v.tojstring().startsWith(Macros.ENTRY)) {
+                    BeltHold.hold(h.user, h.index, v.tojstring());
+                    return self;
+                }
                 LuaPagina ph = LuaPagina.resolve(v);
                 if(ph == null)
-                    throw new LuaError("slot:hold(pagOrNil): expected a Pagina object — one "
+                    throw new LuaError("slot:hold(pagOrNil): expected a Pagina object (one "
                         + CharApi.MG + ":add(id) handed you, or one " + CharApi.MG + ":get(res) found for"
-                        + " an entry another addon added — or nil to end the hold, got " + v.typename());
+                        + " an entry another addon added), a macro's identity macro/<id>, or nil to end the"
+                        + " hold, got " + v.typename());
                 // The entry has to be in THIS character's menu: an entry added to another login's grid draws
                 // nothing here, and the bar and the grid are that one character's pair. inMenu says whose it
                 // is only to say WHY it is not there; a client's-own name is refused pointing at :res(name).

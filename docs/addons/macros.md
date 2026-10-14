@@ -74,6 +74,7 @@ Drag a macro's icon off the page onto a slot of the action bar. The slot holds t
 | Rule | Detail |
 |---|---|
 | Dragging | Press the icon, move, and release over a slot. At the login screen there is no bar, and nothing drags. |
+| A bar an addon draws | An addon that draws the action bar in place of the client's takes the drag too: dropped on one of its buttons, the macro holds that slot by these same rules, and the addon draws it and takes it off. |
 | Pressing | The slot's key with the pointer over the map, or a click on the slot, runs the body as last stored, as **Run** does. |
 | A right-click | Takes the macro off the slot. The server's content comes back, and the slot is the server's again. |
 | Remembered | Per character, as a slot of the bar is: the macro is back in its slot at the next world entry and after a `:reload`. |
@@ -85,7 +86,7 @@ Drag a macro's icon off the page onto a slot of the action bar. The slot holds t
 
 The page stands in the client's tree, and a [selector](api/ui/selectors.md) reaches it as any other widget: `@MacroPanel` is the page, `@MacroRow` one row of the list, whose `label` reads the macro's name, and `@CodeArea` the editor. [`widget:text()`](api/ui/widget.md) and [`widget:value()`](api/ui/edit.md#reading-what-a-borrowed-control-holds) on the editor read the body, its lines joined by `\n`. [`widget:value(body)`](api/ui/edit.md#driving-one-protected), under `widget.value`, replaces it; the page stores it as it stores typing.
 
-On the bar, a slot holding a macro reads `macro/<id>` and the macro's name ([a macro on a slot](api/actionbar.md#a-macro-on-a-slot)), `slot:use()` runs it, and a widget's [`Drop`](api/ui/custom.md#drop-makes-a-widget-a-drop-target) reads a macro dragged onto it as `macro/<id>`.
+On the bar, a slot holding a macro reads `macro/<id>` and the macro's name ([a macro on a slot](api/actionbar.md#a-macro-on-a-slot)), `slot:use()` runs it, and a widget's [`Drop`](api/ui/custom.md#drop-makes-a-widget-a-drop-target) reads a macro dragged onto it as `macro/<id>`. A bar the addon draws puts that macro on its slot with [`slot:hold(res)`](api/actionbar.md#placing-one-from-a-drop) and draws its icon with [`g:resource(res, ...)`](api/ui/drawing.md#images).
 
 There is no `hafen.macros()`: a macro is yours, written on this page and nowhere else.
 
