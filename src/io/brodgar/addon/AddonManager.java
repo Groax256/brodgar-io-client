@@ -2055,8 +2055,14 @@ public final class AddonManager {
      * path as an L1 input hook — so the handler goes straight through {@link #callLua} (watchdog-armed,
      * error-isolated, CPU-accounted), with no thread guard. The fast path (no hotkeys anywhere) returns
      * immediately, so an unbound client is unaffected.
+     *
+     * <p><b>A key typed into the Macros page reaches no addon</b> (175.1): while the keyboard focus ends inside a
+     * surface that does not exist for addons ({@link AddonHidden#typing}), the key goes on unconsumed, before any
+     * hotkey is matched. A key the editor did not consume still reaches the client's own bindings.
      */
     public static boolean onGlobKey(Widget.GlobKeyEvent ev) {
+        if(AddonHidden.typing(screen()))
+            return false;
         return HookApi.dispatchKey(ev);
     }
 

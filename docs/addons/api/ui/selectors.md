@@ -72,6 +72,7 @@ A selector is one or more steps separated by spaces. A step is a role or `*`, re
 | Where `[title=]` goes | The client wraps bare widgets in titled windows, so the grid is `window[title=Cupboard] inventory`. `inventory[title=Cupboard]` is refused and the error hands back that spelling. Under CSS it would parse and never match. |
 | Captions | Match the client's own English whatever it displays: a [catalogue](../locale.md) lands at the render, so `[title=Inventory]` matches a window drawn in another language. |
 | Errors | Anything else raises naming the offending part, listing every valid role for a bad one. The same error comes back for an invalid [sheet key](style/keys.md). |
+| The Macros page | Matches no selector, nor does any widget in it or its **Delete** question: it is [outside every addon's reach](../../macros.md#what-an-addon-sees). A count of matches never includes it. |
 
 ### The one refiner an addon owns
 

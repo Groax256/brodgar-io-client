@@ -245,6 +245,8 @@ final class UiApi {
             return;
         if(!wdg.hasparent(u.root))
             return;                            // hung under something that is not up: announced with it, later
+        if(AddonHidden.is(wdg))
+            return;                            // 175.1: a surface that does not exist for addons enters unannounced
         try {                                  // 174.1: held BEFORE it is queued, so the drain cannot clear it first
             if(wantsHold(st, wdg))
                 wdg.addonheld = Math.max(System.nanoTime(), 1);
@@ -1173,12 +1175,25 @@ final class UiApi {
         return out;
     }
 
-    /** Pre-order collection of every match under {@code w} (inclusive). Under the {@code ui} monitor. */
+    /**
+     * Pre-order collection of every match under {@code w} (inclusive). Under the {@code ui} monitor.
+     *
+     * <p>A surface that does not exist for addons ({@link AddonHidden}, 175.1) is pruned here, inside the walk:
+     * it neither matches nor is descended into. This is the one walk behind every selector door, so a count of
+     * matches never says the page is open.
+     */
     static void collect(Widget w, Selector sel, List<Widget> out) {
+        if(!AddonHidden.is(w))
+            collect0(w, sel, out);
+    }
+
+    private static void collect0(Widget w, Selector sel, List<Widget> out) {
         if(sel.matches(w))
             out.add(w);
-        for(Widget c = w.child; c != null; c = c.next)
-            collect(c, sel, out);
+        for(Widget c = w.child; c != null; c = c.next) {
+            if(!(c instanceof AddonHidden))
+                collect0(c, sel, out);
+        }
     }
 
     /**
@@ -2686,11 +2701,22 @@ final class UiApi {
         return false;
     }
 
-    /** {@code w} and everything under it, in tree order. Caller holds the {@code ui} monitor. */
+    /**
+     * {@code w} and everything under it, in tree order. Caller holds the {@code ui} monitor. A surface that does
+     * not exist for addons ({@link AddonHidden}, 175.1) is pruned: no entry or caption walk offers it, so nothing
+     * ever matched it for a removal to announce.
+     */
     private static void collectSubtree(Widget w, List<Widget> out) {
+        if(!AddonHidden.is(w))
+            collectSubtree0(w, out);
+    }
+
+    private static void collectSubtree0(Widget w, List<Widget> out) {
         out.add(w);
-        for(Widget c = w.child; c != null; c = c.next)
-            collectSubtree(c, out);
+        for(Widget c = w.child; c != null; c = c.next) {
+            if(!(c instanceof AddonHidden))
+                collectSubtree0(c, out);
+        }
     }
 
     /**

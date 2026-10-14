@@ -1521,6 +1521,7 @@ final class Sheet {
             if((p instanceof io.brodgar.addon.ui.PermissionConsentWnd)
                || (p instanceof io.brodgar.addon.ui.AddonPanel)
                || (p instanceof io.brodgar.addon.ui.AddonOptionsPanel)
+               || (p instanceof AddonHidden)           // 175.1: the Macros page keeps the stock look
                || (p instanceof haven.LoginScreen))
                 return true;
         }

@@ -288,12 +288,14 @@ public final class LuaBinding {
         // keyboard is the user's. See KeyHeld for what is stored and why an alt-tab lets go of it.
         //   Unbound reads false, and so does a binding nothing has declared -- neither can fire, so neither
         // can be held. It answers for the key rather than for the handler, so it is true while a text field
-        // has the focus and the hotkey itself is not firing: the question is which keys are down.
+        // has the focus and the hotkey itself is not firing: the question is which keys are down. The one
+        // exception is the Macros page (175.1): while the focus is inside it every binding reads up, so the
+        // keys typed into a macro cannot be followed. KeyHeld goes on tracking them.
         m.set("down", new VarArgFunction() {
             public Varargs invoke(Varargs a) {
                 LuaValue self = Args.only(a, 0, "binding:down");
                 KeyBinding b = handle(self, "down").binding();
-                return LuaValue.valueOf((b != null) && KeyHeld.matches(b.key()));
+                return LuaValue.valueOf(held(b));
             }
         });
         // exists() — has anything declared this id yet? The registry fills in as the client's classes load
@@ -317,11 +319,16 @@ public final class LuaBinding {
                 t.set("key", keyName(b.key()));
                 t.set("default", keyName(b.defkey));
                 t.set("assigned", LuaValue.valueOf(b.set()));
-                t.set("down", LuaValue.valueOf(KeyHeld.matches(b.key())));
+                t.set("down", LuaValue.valueOf(held(b)));
                 return t;
             }
         });
         return m;
+    }
+
+    /** {@code binding:down()}: the key held, and the focus outside the Macros page ({@link AddonHidden#typing}). */
+    private static boolean held(KeyBinding b) {
+        return (b != null) && KeyHeld.matches(b.key()) && !AddonHidden.typing(AddonManager.screen());
     }
 
     private static LuaBinding handle(LuaValue self, String method) {

@@ -119,9 +119,13 @@ public final class LuaWidget {
         return "Widget(" + typeName(w) + ((id < 0) ? "" : ("#" + id)) + ")";
     }
 
-    /** An interned Widget object for {@code w} in {@code owner}'s env — the one way a widget reaches Lua. */
+    /**
+     * An interned Widget object for {@code w} in {@code owner}'s env — the one way a widget reaches Lua. A widget
+     * that does not exist for addons ({@link AddonHidden}, 175.1) answers {@code nil}: this is the backstop
+     * behind every door that hands a widget over, an event's {@code ev:widget()} and {@code m:over()} included.
+     */
     static LuaValue of(final Addon owner, final Widget w) {
-        if(w == null)
+        if((w == null) || AddonHidden.is(w))
             return LuaValue.NIL;
         return owner.widgetObjs.of(w, () -> LuaValue.userdataOf(new LuaWidget(w), meta(owner)));
     }
@@ -3910,9 +3914,19 @@ public final class LuaWidget {
         return w;
     }
 
-    /** A copy of {@code w}'s child list, taken under the {@code ui} monitor so a walk never races tree mutation. */
+    /**
+     * A copy of {@code w}'s child list, taken under the {@code ui} monitor so a walk never races tree mutation.
+     * A child that does not exist for addons ({@link AddonHidden}, 175.1) is left out, and so is all of it.
+     */
     private static List<Widget> kids(Widget w) {
-        synchronized(monitor(w)) { return new ArrayList<Widget>(w.children()); }
+        List<Widget> out = new ArrayList<Widget>();
+        synchronized(monitor(w)) {
+            for(Widget c = w.child; c != null; c = c.next) {
+                if(!(c instanceof AddonHidden))
+                    out.add(c);
+            }
+        }
+        return out;
     }
 
     /**
@@ -4133,7 +4147,7 @@ public final class LuaWidget {
     /**
      * Best-effort text for a text-bearing widget ({@code :text()}, spec 20, W1) — the one upstream-volatile bit,
      * localized in THIS switch (like the spec-14 adapters): {@link Label#texts}, {@link Button} caption,
-     * {@link Window#cap}, {@link TextEntry#text()}, {@link io.brodgar.ui.CodeArea#text()}, {@link ISBox#label()}. An unknown type returns {@code null} (&rarr; Lua {@code nil}),
+     * {@link Window#cap}, {@link TextEntry#text()}, {@link ISBox#label()}. An unknown type returns {@code null} (&rarr; Lua {@code nil}),
      * never throws — upstream churn breaks only this method, not addons.
      *
      * <p>A {@link #secret} entry answers {@code nil}, whatever it holds.
@@ -4158,8 +4172,6 @@ public final class LuaWidget {
             return ((Window)w).cap;
         if(w instanceof TextEntry)
             return ((TextEntry)w).text();
-        if(w instanceof io.brodgar.ui.CodeArea)    // 174: the Macros page's editor, its lines joined by \n
-            return ((io.brodgar.ui.CodeArea)w).text();
         if(w instanceof CheckBox)                  // 040.4: CheckBox.lbls is public for exactly this read
             return ((CheckBox)w).lbls;             // addon: (102.2) the caption it was WRITTEN -- see Button above
         if(w instanceof ISBox)                     // a building site's material box: the "have/total" it draws
@@ -4334,8 +4346,6 @@ public final class LuaWidget {
                 return LuaValue.valueOf(((Scrollbar)w).val);
             if(w instanceof TextEntry)
                 return LuaValue.valueOf(((TextEntry)w).text());
-            if(w instanceof io.brodgar.ui.CodeArea)    // 174: the Macros page's editor holds its body
-                return LuaValue.valueOf(((io.brodgar.ui.CodeArea)w).text());
             if(w instanceof SListWidget)          // a list, a dropbox and a menu's inner list: the picked row
                 return LuaRow.of(owner, ((SListWidget<?, ?>)w).sel);
             if(w instanceof Progress)
@@ -4438,6 +4448,9 @@ public final class LuaWidget {
      * <p>The one difference from the tooltip actually on screen is {@code last}: the live query carries the
      * widget that answered on the previous frame, which a couple of the client's own widgets use to keep a
      * hovering tip stable. A question asked out of the blue has no previous frame, so it passes none.
+     *
+     * <p>A tip answered from a surface that does not exist for addons ({@link AddonHidden}, 175.1) is no
+     * widget's: the answer is {@code null}.
      */
     static Widget tipAt(UI u, Coord c) {
         Widget.TooltipQuery q = new Widget.TooltipQuery(c, null);
@@ -4445,7 +4458,7 @@ public final class LuaWidget {
             if(!AddonManager.surfaceQuery(q, c))
                 u.dispatch(u.root, q);
         }
-        return q.from;
+        return AddonHidden.is(q.from) ? null : q.from;
     }
 
     /**
@@ -4529,14 +4542,25 @@ public final class LuaWidget {
      * real click would). Returns the deepest hit, {@code from} itself when the point is in its own hit area but no
      * child claims it, or {@code null} when the point misses {@code from} entirely. Must be called under the
      * {@code ui} monitor.
+     *
+     * <p>A deepest widget that does not exist for addons ({@link AddonHidden}, 175.1) climbs to its nearest
+     * ancestor that does: the Options window over the Macros page, {@code ui.root} over its Delete question.
+     * A {@code nil} there would turn the window hollow under the pointer.
      */
     static Widget hitTest(Widget from, Coord c) {
+        Widget hit = deepestUnder(from, c);
+        while((hit != null) && AddonHidden.is(hit))
+            hit = hit.parent;
+        return hit;
+    }
+
+    private static Widget deepestUnder(Widget from, Coord c) {
         for(Widget wdg = from.lchild; wdg != null; wdg = wdg.prev) {
             if(!wdg.visible())
                 continue;
             Coord cc = from.xlate(wdg.c, true);
             if((wdg.sz != null) && c.isect(cc, wdg.sz)) {
-                Widget hit = hitTest(wdg, c.sub(cc));
+                Widget hit = deepestUnder(wdg, c.sub(cc));
                 if(hit != null)
                     return hit;
             }

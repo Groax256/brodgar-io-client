@@ -1,0 +1,10 @@
+{
+  "name": "175.1 — the Macros page does not exist for addons",
+  "id": "175-macros-hidden-from-addons.1",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 175.1: while the Macros page and its Delete question stand, no selector, selector watch, walk or hit test reaches them, and a key typed there fires no addon hotkey and reads up through binding:down().",
+  "api_version": "1.0",
+  "permissions": ["client.settings"],
+  "files": ["main.lua"]
+}

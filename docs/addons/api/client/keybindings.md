@@ -117,6 +117,7 @@ end)
 |---|---|
 | Key repeat is no substitute | A held key fires the hotkey at the system's repeat rate. A desktop repeats only the key pressed last (hold `W`, tap `D`, `W` stops). The delay before the first repeat is unreadable. |
 | The key, not the handler | A hotkey does not fire while a text field has focus. `down()` still reports the key down. Guard on focus yourself. Starting the poll from the hotkey and stopping it when nothing is held is usually enough. |
+| The Macros page | While the keyboard focus is in [the Macros page](../../macros.md#what-an-addon-sees) or its **Delete** question, every `down()` reads `false`, and no addon hotkey fires on a key the page does not take. What is typed there reaches no addon. |
 | Matched as pressed | Taking up or letting go of `Shift` after the key went down neither makes nor breaks the match. |
 | Unbound reads `false` | So does an undeclared binding. |
 | Focus loss lets go of everything | A key held through an alt-tab has its release delivered elsewhere, so the client drops the whole set. Come back with it held and it reads up until pressed again. |

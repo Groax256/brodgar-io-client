@@ -84,7 +84,17 @@ Drag a macro's icon off the page onto a slot of the action bar. The slot holds t
 
 ## What an addon sees
 
-The page stands in the client's tree, and a [selector](api/ui/selectors.md) reaches it as any other widget: `@MacroPanel` is the page, `@MacroRow` one row of the list, whose `label` reads the macro's name, and `@CodeArea` the editor. [`widget:text()`](api/ui/widget.md) and [`widget:value()`](api/ui/edit.md#reading-what-a-borrowed-control-holds) on the editor read the body, its lines joined by `\n`. [`widget:value(body)`](api/ui/edit.md#driving-one-protected), under `widget.value`, replaces it; the page stores it as it stores typing.
+The page does not exist for addons. A macro runs unsandboxed, so what the page shows and what you type into it reach no addon, and no `:lua` line either. The rule covers the page, every widget in it, and its **Delete** question.
+
+| Door | Over the page |
+|---|---|
+| [Selectors](api/ui/selectors.md) | Match nothing in it. `@MacroPanel`, `@MacroRow` and `@CodeArea` answer no widget while it is open, and a count of matches never includes it. |
+| [`widget:children()`, `widget:walk(fn)`](api/ui/widget.md#read-methods) | The Options window's leave it out. |
+| [`hafen.ui():hit(x, y)`](api/ui/selectors.md#hit-testing), [`hafen.ui():mouse():over()`](api/ui/mouse.md) | Answer the Options window over the page, and the root widget over the **Delete** question: the nearest widget outside it. |
+| [`hafen.ui():tipAt(x, y)`](api/ui/widget.md#tooltips-and-focus) | `nil`. |
+| Events | Its opening and closing fire nothing: no selector's `Added` or `Removed`, no widget's event. |
+| [Stylesheets](api/ui/style/README.md) | Reach none of it. The page is drawn in the stock look, as [the AddOns page](panel.md) is. |
+| [Hotkeys](api/client/keybindings.md) | While the keyboard focus is in the page or its question, no addon hotkey fires and every `binding:down()` reads `false`. A key the page does not take still reaches the client's own bindings. |
 
 On the bar, a slot holding a macro reads `macro/<id>` and the macro's name ([a macro on a slot](api/actionbar.md#a-macro-on-a-slot)), `slot:use()` runs it, and a widget's [`Drop`](api/ui/custom.md#drop-makes-a-widget-a-drop-target) reads a macro dragged onto it as `macro/<id>`. A bar the addon draws puts that macro on its slot with [`slot:hold(res)`](api/actionbar.md#placing-one-from-a-drop) and draws its icon with [`g:resource(res, ...)`](api/ui/drawing.md#images).
 
@@ -96,6 +106,6 @@ There is no `hafen.macros()`: a macro is yours, written on this page and nowhere
 
 - [The AddOns manager](panel.md) — the page above it on the game menu.
 - [The console commands](runtime.md#the-console-commands) — `:lua`, the runtime a macro runs in.
-- [Selectors](api/ui/selectors.md) — reaching a widget of the client's tree.
-- [Widget](api/ui/widget.md) — `widget:text()` and the other reads.
+- [Selectors](api/ui/selectors.md) — reaching a widget of the client's tree, the page excepted.
+- [Keybindings](api/client/keybindings.md) — the hotkeys the page holds back.
 - [`session:actionbar`](api/actionbar.md#a-macro-on-a-slot) — a macro's slot, as an addon reads it.

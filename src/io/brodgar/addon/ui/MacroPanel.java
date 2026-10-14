@@ -17,6 +17,7 @@ import haven.UI;
 import haven.Widget;
 import haven.Window;
 
+import io.brodgar.addon.AddonHidden;
 import io.brodgar.addon.AddonManager;
 import io.brodgar.addon.Macro;
 import io.brodgar.addon.MacroPagina;
@@ -41,8 +42,12 @@ import java.util.List;
  * <p>Like {@link AddonPanel} it holds no listener: it polls {@link Macros#gen} every tick, so a list written
  * from anywhere is the list it shows. Rows are {@link MacroRow}s, each a {@link Label} beside the icon, so a
  * row is read back by its name.
+ *
+ * <p><b>It does not exist for addons</b> (175.1): the page and its Delete question wear {@link AddonHidden}, so
+ * no selector, walk, hit test or event reaches them, no stylesheet styles them, and a key typed here reaches no
+ * addon hotkey. A macro runs unsandboxed, and its body is what an addon would read here.
  */
-public class MacroPanel extends OptWnd.Panel {
+public class MacroPanel extends OptWnd.Panel implements AddonHidden {
     /** The list's width, the editor's box, the icon's box, a row's height, the gap between the columns, a button. */
     static final int LIST_W = 200, EDIT_W = 440, EDIT_H = 300, ICON = 36, ROW_H = 24, GAP = 10, BUTTON_W = 100;
     /** What the status line says when Save meets an empty name. */
@@ -181,7 +186,7 @@ public class MacroPanel extends OptWnd.Panel {
             return;
         closeConfirm();
         final int id = editing.id;
-        Window w = new Window(Coord.z, "Delete macro");
+        Window w = new Confirm();
         Label q = w.add(new Label("Delete macro \"" + editing.name + "\"?"), new Coord(0, 0));
         Button yes = w.add(new Button(UI.scale(80), "Yes", false).action(() -> {
                     closeConfirm();
@@ -241,6 +246,13 @@ public class MacroPanel extends OptWnd.Panel {
     }
 
     // ---- the widgets -----------------------------------------------------------------------------
+
+    /** Delete's question. It stands on {@code ui.root}, outside the page, so it wears the marker itself. */
+    public static class Confirm extends Window implements AddonHidden {
+        Confirm() {
+            super(Coord.z, "Delete macro");
+        }
+    }
 
     /** Draw the first image of the resource {@code res} fitted in {@code box} at {@code ul}; nothing while it loads. */
     static void drawIcon(GOut g, String res, Coord ul, Coord box) {
