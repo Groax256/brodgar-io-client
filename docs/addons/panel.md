@@ -1,6 +1,6 @@
 # The AddOns Manager
 
-**AddOns**, on the game menu `Ctrl+O` opens, switches your addons on and off and finds new ones. The **Installed** tab lists every addon in `addons/` as a table with an enable box, updates any the hub has a newer version of, and removes the ones the hub installed. The **Browse** tab is the front page of `brodgar.io/addons`, the hub, drawn in the client, bundles included. The client reads the hub anonymously: the request carries nothing about you or your character.
+**AddOns**, on the game menu `Ctrl+O` opens, switches your addons on and off and finds new ones. The **Installed** tab lists every addon in `addons/` as a table with an enable box, updates any the hub has a newer version of, and removes the ones the hub installed. The **Browse** tab is the front page of `brodgar.io/addons`, the hub, drawn in the client, bundles included. The client reads the hub anonymously: the request carries nothing about you or your character. Directly below **AddOns** on the same menu stands **Macros**, [your own snippets of Lua](macros.md).
 
 ---
 
@@ -121,3 +121,4 @@ Nothing that asks for nothing new opens it: those are enabled at once. A theme c
 - [The runtime](runtime.md) — what a reload does with what this manager changed, and the console commands.
 - [Permissions](guides/permissions.md) — what enabling an addon that declares a permission asks you, and why.
 - [Debugging](guides/debugging.md) — an addon whose status is `error`, `outdated` or `disabled`.
+- [Macros](macros.md) — the page below this one on the game menu.

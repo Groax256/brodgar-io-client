@@ -1,0 +1,9 @@
+{
+  "name": "174.1 — the Macros page keeps the player's macros",
+  "id": "174-macros.1",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 174.1: the Macros page of the game menu lists, names, edits, saves and deletes macros, refuses an empty name on its status line, keeps an edit across a switch of rows, and widget:text() reads its code editor.",
+  "api_version": "1.0",
+  "files": ["main.lua"]
+}

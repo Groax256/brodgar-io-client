@@ -39,7 +39,9 @@ instance all point at the same one. It is opened on `OptWnd.main` every time: `s
 | The caption | `Panel.cap` is what the window is called **while that panel shows**, `null` for a panel that carries none. `chpanel` writes it through `Window.chcap` behind an equality test, `chcap` being the one caption seam |
 | A panel is born hidden | `Panel()` sets `visible = false` at `Coord.z`; whatever puts one on screen calls `show()` itself |
 | Where a resize stops | `OptWnd.cresize(Widget)` repacks the window and re-centres it on its old middle — **only when the child is `current`**, so a panel that is not showing may resize freely |
+| The game menu | `OptWnd(boolean)` fills `main` with one `PButton` per page, top to bottom, `y` carried from each button's `pos("bl")`; the session entries below them only when the flag is set, which is `LoginScreen`'s `OptWnd(false)` leaving them out |
 | The menu button | `OptWnd.PButton` builds its panel on first press, `chpanel`s it and keeps it. Its `fresh` flag destroys the previous build first, which is what a panel whose contents are read at build time needs |
+| When a panel's `hide()` runs | from `chpanel`, and only there: on a `PButton` press, and on every `OptWnd.show()`, which is `chpanel(main)`. Closing the window — the close box, Escape, `reqclose()` — is `Widget.hide()` on the **window**: `current` stays `visible` inside it until the next `show()`. A panel that acts on leaving the screen watches `tvisible()` from `tick` as well |
 | Escape | nothing under this window binds it, so it reaches `Window.keydown` and closes the window like any other |
 
 ## The settings view — a list on the left, a panel on the right

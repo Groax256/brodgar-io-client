@@ -9,7 +9,9 @@ import io.brodgar.ui.WndPos;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,8 +22,9 @@ import java.util.prefs.Preferences;
 /**
  * <b>The client's own file</b>, {@code savedata/client.sqlite}. What the client keeps for itself lives
  * here and nowhere else: its preferences — every {@code Utils.getpref*}/{@code setpref*}, the table
- * {@code prefs} — and the two records it keeps <i>about</i> an addon, where the user put its windows
- * ({@code placements}) and which action-bar slots hold its menu entries ({@code holds}). An addon's own
+ * {@code prefs} — the two records it keeps <i>about</i> an addon, where the user put its windows
+ * ({@code placements}) and which action-bar slots hold its menu entries ({@code holds}), and the player's own
+ * macros ({@code macros}, {@link Macros}). An addon's own
  * file ({@link SqliteApi.Db}) holds what the addon stores through {@code hafen.store()}, and nothing of
  * the client's: the rule is by owner. <b>The login secrets are the one exception</b>: the saved tokens, the
  * list of remembered accounts and the install's token identity ({@link Prefs#secret}) never reach the file —
@@ -283,6 +286,77 @@ public final class ClientDb {
             return;
         try {
             conn.holds(scope, rows);
+        } catch(Exception | LinkageError e) {
+            fail("could not be written", e);
+        }
+    }
+
+    // ---- the macros (174) --------------------------------------------------------------------------
+
+    /**
+     * <b>Every macro the player keeps</b> ({@link Macros}), by id — one list for the whole client, every account
+     * and character. {@code null} when the file is unavailable or the read failed: the list the session then
+     * holds is not the file, and nothing writes it back.
+     */
+    static List<Macro> macros() {
+        return get().readMacros();
+    }
+
+    /** <b>Add one macro</b>; answers its id, or {@code -1} while the file is unavailable or the write failed. */
+    static int macroAdd(String name, String icon, String body) {
+        return get().writeMacroAdd(name, icon, body);
+    }
+
+    /** <b>Store one macro's name and body.</b> Nothing while the file is unavailable or closed. Never throws. */
+    static void macroSave(int id, String name, String body) {
+        get().writeMacroSave(id, name, body);
+    }
+
+    /**
+     * <b>Delete one macro</b> and every {@code holds} row whose entry is {@code macro/<id>}, on every character,
+     * in one transaction. Nothing while the file is unavailable or closed. Never throws.
+     */
+    static void macroDelete(int id) {
+        get().writeMacroDelete(id);
+    }
+
+    private synchronized List<Macro> readMacros() {
+        if(conn == null)
+            return null;
+        try {
+            return conn.macros();
+        } catch(Exception | LinkageError e) {
+            fail("could not be read", e);
+            return null;
+        }
+    }
+
+    private synchronized int writeMacroAdd(String name, String icon, String body) {
+        if(conn == null)
+            return -1;
+        try {
+            return conn.macroAdd(name, icon, body);
+        } catch(Exception | LinkageError e) {
+            fail("could not be written", e);
+            return -1;
+        }
+    }
+
+    private synchronized void writeMacroSave(int id, String name, String body) {
+        if(conn == null)
+            return;
+        try {
+            conn.macroSave(id, name, body);
+        } catch(Exception | LinkageError e) {
+            fail("could not be written", e);
+        }
+    }
+
+    private synchronized void writeMacroDelete(int id) {
+        if(conn == null)
+            return;
+        try {
+            conn.macroDelete(id);
         } catch(Exception | LinkageError e) {
             fail("could not be written", e);
         }
@@ -580,6 +654,11 @@ public final class ClientDb {
                         + " PRIMARY KEY (addon, scope, name)) WITHOUT ROWID");
                     st.execute("CREATE TABLE IF NOT EXISTS holds (scope TEXT NOT NULL, slot INTEGER NOT NULL,"
                         + " entry TEXT NOT NULL, PRIMARY KEY (scope, slot)) WITHOUT ROWID");
+                    // 174: additive, so SCHEMA does not move -- an older build opens the file and never reads it.
+                    // AUTOINCREMENT: a deleted id is never handed out again, so an older build's dormant
+                    // macro/<id> slot row can never come back under another macro.
+                    st.execute("CREATE TABLE IF NOT EXISTS macros (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        + " name TEXT NOT NULL, icon TEXT NOT NULL, body TEXT NOT NULL)");
                     if(have < SCHEMA)
                         st.execute("PRAGMA user_version = " + SCHEMA);
                 }
@@ -740,6 +819,58 @@ public final class ClientDb {
                     try(java.sql.PreparedStatement del = c.prepareStatement(
                             "DELETE FROM holds WHERE substr(entry, 1, length(?1)) = ?1")) {
                         del.setString(1, entryPrefix);
+                        del.executeUpdate();
+                    }
+                }
+            });
+        }
+
+        /** Every row of {@code macros}, by id. */
+        List<Macro> macros() throws java.sql.SQLException {
+            List<Macro> out = new ArrayList<Macro>();
+            try(java.sql.Statement st = c.createStatement();
+                java.sql.ResultSet rs = st.executeQuery("SELECT id, name, icon, body FROM macros ORDER BY id")) {
+                while(rs.next())
+                    out.add(new Macro(rs.getInt(1), rs.getString(2), rs.getString(3), rs.getString(4)));
+            }
+            return out;
+        }
+
+        /** One row written; answers its id. */
+        int macroAdd(String name, String icon, String body) throws java.sql.SQLException {
+            try(java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO macros (name, icon, body) VALUES (?, ?, ?)", java.sql.Statement.RETURN_GENERATED_KEYS)) {
+                ps.setString(1, name);
+                ps.setString(2, icon);
+                ps.setString(3, body);
+                ps.executeUpdate();
+                try(java.sql.ResultSet rs = ps.getGeneratedKeys()) {
+                    if(!rs.next())
+                        throw new java.sql.SQLException("the new macro's id was not returned");
+                    return rs.getInt(1);
+                }
+            }
+        }
+
+        void macroSave(int id, String name, String body) throws java.sql.SQLException {
+            try(java.sql.PreparedStatement ps = c.prepareStatement("UPDATE macros SET name = ?, body = ? WHERE id = ?")) {
+                ps.setString(1, name);
+                ps.setString(2, body);
+                ps.setInt(3, id);
+                ps.executeUpdate();
+            }
+        }
+
+        /** The row and every slot held for it, on every character, in one transaction. */
+        void macroDelete(final int id) throws java.sql.SQLException {
+            transaction(new Work() {
+                public void run() throws java.sql.SQLException {
+                    try(java.sql.PreparedStatement del = c.prepareStatement("DELETE FROM macros WHERE id = ?")) {
+                        del.setInt(1, id);
+                        del.executeUpdate();
+                    }
+                    try(java.sql.PreparedStatement del = c.prepareStatement("DELETE FROM holds WHERE entry = ?")) {
+                        del.setString(1, Macros.ENTRY + id);
                         del.executeUpdate();
                     }
                 }

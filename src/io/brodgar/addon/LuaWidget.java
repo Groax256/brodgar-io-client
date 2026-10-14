@@ -4133,7 +4133,7 @@ public final class LuaWidget {
     /**
      * Best-effort text for a text-bearing widget ({@code :text()}, spec 20, W1) — the one upstream-volatile bit,
      * localized in THIS switch (like the spec-14 adapters): {@link Label#texts}, {@link Button} caption,
-     * {@link Window#cap}, {@link TextEntry#text()}, {@link ISBox#label()}. An unknown type returns {@code null} (&rarr; Lua {@code nil}),
+     * {@link Window#cap}, {@link TextEntry#text()}, {@link io.brodgar.ui.CodeArea#text()}, {@link ISBox#label()}. An unknown type returns {@code null} (&rarr; Lua {@code nil}),
      * never throws — upstream churn breaks only this method, not addons.
      *
      * <p>A {@link #secret} entry answers {@code nil}, whatever it holds.
@@ -4158,6 +4158,8 @@ public final class LuaWidget {
             return ((Window)w).cap;
         if(w instanceof TextEntry)
             return ((TextEntry)w).text();
+        if(w instanceof io.brodgar.ui.CodeArea)    // 174: the Macros page's editor, its lines joined by \n
+            return ((io.brodgar.ui.CodeArea)w).text();
         if(w instanceof CheckBox)                  // 040.4: CheckBox.lbls is public for exactly this read
             return ((CheckBox)w).lbls;             // addon: (102.2) the caption it was WRITTEN -- see Button above
         if(w instanceof ISBox)                     // a building site's material box: the "have/total" it draws

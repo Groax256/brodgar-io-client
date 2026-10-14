@@ -26,6 +26,7 @@ That is a whole addon beside a [`manifest.json`](manifest.md) naming it. Nothing
 | [The manifest](manifest.md) | What names an addon: the folder, the manifest field by field, the API version it declares. |
 | [The runtime](runtime.md) | When your code runs, the sandbox, the CPU budgets, the console commands. |
 | [The AddOns manager](panel.md) | The Installed tab that enables, updates and removes an addon, and the Browse tab that searches the hub. |
+| [Macros](macros.md) | Your own Lua snippets, kept by the client on the Macros page of the game menu. |
 | [Dev tools](examples.md) | Three addons to point at your own while you write it, from the addons repository. |
 
 ## The API at a glance

@@ -1310,6 +1310,8 @@ public class OptWnd extends Window {
 	y = main.add(new PButton(UI.scale(200), "Options", 'o', settings), 0, y).pos("bl").adds(0, 5).y;
 	// addon: AddOns manager panel (spec 10 / 1f-3) — the whole panel lives in io.brodgar.addon.ui.
 	y = main.add(new PButton(UI.scale(200), "AddOns", 'd', () -> new io.brodgar.addon.ui.AddonPanel(OptWnd.this, main)), 0, y).pos("bl").adds(0, 5).y;
+	// addon: (174) the player's macros — the whole page lives in io.brodgar.addon.ui.
+	y = main.add(new PButton(UI.scale(200), "Macros", 'm', () -> new io.brodgar.addon.ui.MacroPanel(OptWnd.this, main)), 0, y).pos("bl").adds(0, 5).y;
 	y += UI.scale(20);
 	if(gopts) {
 	    if((SteamStore.steamsvc.get() != null) && (Steam.get() != null)) {
