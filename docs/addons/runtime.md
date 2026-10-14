@@ -104,7 +104,8 @@ Press `:` to open the client's command line.
 | Rule | Detail |
 |---|---|
 | `:lua` | Prints its result as JSON prefixed `lua=`, in the console and in full on the terminal. Your own console, not sandboxed: every protected verb answers, the fastest way to try a call and to break something. The instruction watchdog applies. |
-| `:reload` undoes anything typed there | The console owns what it puts up as an addon does: windows, gob labels, overlays, hotkeys, clips. A reload takes it back by the same teardown. |
+| A macro is a kept `:lua` line | A body on the [Macros](macros.md) page runs in this same Lua: the same globals, the same permissions, the same `print`, the same watchdog. It is statements only, and its value is never shown. |
+| `:reload` undoes anything typed there | The console owns what it puts up, from a typed line or a macro, as an addon does: windows, gob labels, overlays, hotkeys, clips. A reload takes it back by the same teardown. |
 | `print` inside `:lua` | Answers in the System channel too, one line per `print`, tab-separated, where `lua=` and `:threads` land. The terminal keeps its copy whole. A line shows once finished, so an `io.write` with no newline waits. Before a HUD is up the terminal is the whole of it. In an addon, `print` goes to the terminal alone. [`hafen.log():write`](api/log.md) reaches the player. |
 | Reserved | `lua`, `addons` and `reload` cannot be taken over, and neither can `store` or any other command the client itself owns. Addons add commands with [`hafen.console`](api/console.md). |
 | Saying a line | [`session:console():run(line)`](api/console.md#run-a-line-protected) runs any of these and any client command at the character you address, without the colon (`run("reload")`). `run("lo")` logs out the character it was said at. Needs `console.run`, the widest key, since `:lua` is among the commands it reaches. |

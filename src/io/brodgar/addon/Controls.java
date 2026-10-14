@@ -1002,7 +1002,7 @@ final class Controls {
     static LuaError noValue(Widget w) {
         return new LuaError("widget:value(v) writes what a control HOLDS, and " + LuaWidget.typeName(w)
             + " holds nothing — a checkbox, a radio button, a slider, a scrollbar, a text entry, a list, a"
-            + " dropdown and a kin-colour row are what hold one, whether the client built it or you did"
+            + " dropdown, a kin-colour row and the Macros page's code editor are what hold one, whether the client built it or you did"
             + " (hafen.ui():check(),"
             + " :radio(), :slider(), :scrollbar(), :entry(), :listbox(), :dropdown() — and :progress(), which"
             + " holds one on a bar you built).");
@@ -1090,6 +1090,15 @@ final class Controls {
                     });
                 }
             }
+            return;
+        }
+        if(w instanceof io.brodgar.ui.CodeArea) {      // 174: the Macros page's editor, the body it holds
+            io.brodgar.ui.CodeArea a = (io.brodgar.ui.CodeArea)w;
+            String s = str(v, "a code editor", "the body it holds, its lines joined by \\n");
+            if(s.length() > a.max)
+                throw new LuaError("widget:value(v) on a code editor takes at most " + a.max + " characters,"
+                    + " newlines counted, and this body has " + s.length());
+            synchronized(mon) { a.text(s); }
             return;
         }
         if(w instanceof haven.TextEntry) {

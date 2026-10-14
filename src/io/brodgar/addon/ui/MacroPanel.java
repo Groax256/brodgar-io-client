@@ -15,6 +15,7 @@ import haven.UI;
 import haven.Widget;
 import haven.Window;
 
+import io.brodgar.addon.AddonManager;
 import io.brodgar.addon.Macro;
 import io.brodgar.addon.Macros;
 import io.brodgar.ui.CodeArea;
@@ -25,7 +26,8 @@ import java.util.List;
  * The <b>Macros</b> page of the game menu (174): the player's own Lua snippets, kept by the client
  * ({@link Macros}). On the left a list of every macro, its icon and its name; on the right, for the one
  * selected, its icon, its name, a {@link CodeArea} holding its body and a status line, then <b>New</b>,
- * <b>Save</b>, <b>Delete</b> and <b>Run</b>, and <b>Back</b> under everything.
+ * <b>Save</b>, <b>Delete</b> and <b>Run</b>, and <b>Back</b> under everything. Run saves, then runs the body
+ * as a {@code :lua} line runs ({@link AddonManager#runMacro}).
  *
  * <p><b>Saving.</b> Save stores the name and the body, and refuses an empty name on the status line. Whatever
  * takes the fields away from a macro stores them first — another row picked, New, Delete of another, the page
@@ -68,8 +70,7 @@ public class MacroPanel extends OptWnd.Panel {
         Button nb = add(new Button(UI.scale(BUTTON_W), "New", false).action(this::create), new Coord(x, by));
         save = add(new Button(UI.scale(BUTTON_W), "Save", false).action(this::save), nb.pos("ur").adds(GAP, 0));
         delete = add(new Button(UI.scale(BUTTON_W), "Delete", false).action(this::ask), save.pos("ur").adds(GAP, 0));
-        run = add(new Button(UI.scale(BUTTON_W), "Run", false), delete.pos("ur").adds(GAP, 0));
-        run.disable(true);
+        run = add(new Button(UI.scale(BUTTON_W), "Run", false).action(this::run), delete.pos("ur").adds(GAP, 0));
         list = add(new MacroList(new Coord(UI.scale(LIST_W), nb.c.y + nb.sz.y)), new Coord(0, 0));
         add(opt.new PButton(UI.scale(200), "Back", 27, back), list.pos("bl").adds(0, 8));
         pack();
@@ -157,6 +158,16 @@ public class MacroPanel extends OptWnd.Panel {
             return;
         if(commit(true))
             status.settext("Saved.");
+    }
+
+    /** Save, then run the body in the {@code :lua} console's runtime. An empty name is refused, and nothing runs. */
+    private void run() {
+        if(editing == null)
+            return;
+        if(!commit(true))
+            return;
+        status.settext("");
+        AddonManager.runMacro(editing.id);
     }
 
     /** Delete's question, in a window of its own over everything. */

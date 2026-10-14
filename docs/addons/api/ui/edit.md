@@ -116,7 +116,7 @@ end)
 
 ## Reading what a borrowed control holds
 
-`widget:value()` answers on a client control as on [one you built](controls/README.md#setters). A checkbox's boolean. A radio's row, read from any of its buttons. A slider's or scrollbar's number. A text field's string. A list's or dropdown's row. A [key button](controls/interactive.md#key-button)'s key, spelled as [`binding:key()`](../client/keybindings.md#the-binding-object) spells it, `nil` for unbound. A widget that holds nothing reads `nil`. Unprotected, no layer. A row of one of the client's own lists is a [Row](lists.md#reading-one): compare it with `==`, and read it with `row:text()`, `row:group()` and `row:info()`.
+`widget:value()` answers on a client control as on [one you built](controls/README.md#setters). A checkbox's boolean. A radio's row, read from any of its buttons. A slider's or scrollbar's number. A text field's string. The [Macros](../../macros.md#what-an-addon-sees) editor's body, its lines joined by `\n`. A list's or dropdown's row. A [key button](controls/interactive.md#key-button)'s key, spelled as [`binding:key()`](../client/keybindings.md#the-binding-object) spells it, `nil` for unbound. A widget that holds nothing reads `nil`. Unprotected, no layer. A row of one of the client's own lists is a [Row](lists.md#reading-one): compare it with `==`, and read it with `row:text()`, `row:group()` and `row:info()`.
 
 ---
 
@@ -137,6 +137,7 @@ options_checkbox:value(not options_checkbox:value())    -- ticked, exactly as a 
 | A radio button | One of its group's row labels | Moves the whole group's selection to that row. |
 | A slider, a scrollbar | A number | Moves it there, clamped into the control's bounds. |
 | A text entry | A string | Replaces the line in the field. |
+| The Macros page's code editor | A string, at most 65,536 characters | Replaces the body, the caret at its start. Nothing is stored until the page stores it. A longer string raises, naming the limit. |
 | A list, a dropdown | A row of that list | Picks it. A list scrolls the row into view, by the least movement. |
 | A colour row (the kin colours) | A number, `0..254` | Picks that group, as clicking a square does. `widget:value()` reads the group it shows, `nil` for none. |
 

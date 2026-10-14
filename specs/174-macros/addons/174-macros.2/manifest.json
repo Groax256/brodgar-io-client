@@ -1,0 +1,10 @@
+{
+  "name": "174.2 — a macro runs like :lua",
+  "id": "174-macros.2",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 174.2: Run runs a macro's body in the :lua console's runtime, its globals, its print, its error path, its value unshown, and widget:value on the code editor.",
+  "api_version": "1.0",
+  "permissions": ["widget.value", "console.run"],
+  "files": ["main.lua"]
+}

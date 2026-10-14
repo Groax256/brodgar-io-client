@@ -1388,6 +1388,9 @@ public final class AddonManager {
             // because it was already inside another tree's monitor. Free when nobody logged from one.
             drainNotices();
 
+            // 174: the macros a press asked to run, here where no tree's monitor is held.
+            drainMacroQueue();
+
             // 079.4: every session's gob queue, settled and reported ONCE for the client — GobAdded into the
             // first session that sees an object, GobRemoved out of the last, and nothing in between. Before
             // drainGround, because a spawn or a despawn is exactly what moves the ground under a thing
@@ -5913,7 +5916,7 @@ public final class AddonManager {
                 UI u = screen();
                 if(u != null) {
                     try {
-                        u.cons.out.println(clampMsg(s));
+                        u.cons.out.print(clampMsg(s) + "\n");   // never println: its \r\n leaves a \r in the System log line
                     } catch(RuntimeException e) {
                         /* pre-HUD or no console sink yet; stdout still has it */
                     }
@@ -5946,15 +5949,67 @@ public final class AddonManager {
     private static void eval(String src) {
         if(src.isEmpty())
             return;
-        UI u = screen();   // where the answer is printed: the console the line was typed into
         System.out.println("[console] :lua " + src);               // echo the input to the terminal
+        run(src, "=lua", true, "lua: ", true);
+    }
+
+    /**
+     * <b>Run a macro</b> (174): the body of the macro of {@code id}, in the {@code :lua} console's runtime — its
+     * globals, its permissions, its {@code print}, its watchdog and its error path. A chunk of statements, never
+     * an expression, and its value is not shown: a {@code lua=} line on every press of a slot is noise. An error
+     * reads {@code macro:<name>:<line>: …}. A macro deleted since does nothing.
+     *
+     * <p><b>Never under a tree's monitor.</b> A press — the page's Run, a slot's key — is dispatched holding the
+     * character's tree, where a body building a window of the addon layer would be refused as the second tree.
+     * A run asked for there waits for the layer's next step ({@link #drainMacroQueue}), which holds none; asked
+     * for anywhere else it runs at once. The macro is read when it runs, so a run queued and then deleted does
+     * nothing.
+     */
+    public static void runMacro(final int id) {
+        if(LuaWidget.heldOther(null) != null) {
+            macroQueue.add(id);
+            return;
+        }
+        Macro m = Macros.get(id);
+        if(m == null)
+            return;
+        System.out.println("[console] macro " + m.name);
+        run(m.body, "=macro:" + m.name, false, "", false);
+    }
+
+    /** The macros asked to run from inside a tree's monitor, waiting for the step ({@link #runMacro}). */
+    private static final Queue<Integer> macroQueue = new ConcurrentLinkedQueue<Integer>();
+
+    /** Run every macro queued since the last step, taken out of the queue first: a body cannot queue itself here. */
+    private static void drainMacroQueue() {
+        if(macroQueue.isEmpty())
+            return;
+        List<Integer> ids = new ArrayList<Integer>();
+        for(Integer id = macroQueue.poll(); id != null; id = macroQueue.poll())
+            ids.add(id);
+        for(int i = 0, n = ids.size(); i < n; i++)
+            runMacro(ids.get(i));
+    }
+
+    /**
+     * The console's one way into its Lua, {@code :lua} and a macro alike. {@code chunk} names the source in an
+     * error ({@code =lua} reads {@code lua:1:}); {@code exprFirst} tries {@code return <src>} before the
+     * statements; {@code errPrefix} leads the error notice; {@code showValue} answers a non-nil result as
+     * {@code lua= …}.
+     */
+    private static void run(String src, String chunkName, boolean exprFirst, String errPrefix, boolean showValue) {
+        UI u = screen();   // where the answer is printed: the console the line was typed into
         try {
-            LuaValue chunk;
-            try {
-                chunk = console().load("return " + src, "=lua");   // expression form: show its value
-            } catch(LuaError e) {
-                chunk = console().load(src, "=lua");                // statement form (e.g. print(...))
+            LuaValue chunk = null;
+            if(exprFirst) {
+                try {
+                    chunk = console().load("return " + src, chunkName);   // expression form: show its value
+                } catch(LuaError e) {
+                    /* not an expression: the statement form below */
+                }
             }
+            if(chunk == null)
+                chunk = console().load(src, chunkName);                  // statement form (e.g. print(...))
             // watchdog the console too (e.g. a stray `while true do end`); 126.2: paired with a release,
             // so this entry's budget is this entry's and the next line typed gets a full one of its own.
             // audit2 B06: and the REPL owner's lock, because a typed line is an entry into its Lua like any
@@ -5970,13 +6025,15 @@ public final class AddonManager {
                     leaveLua(co);
                 Sandbox.disarm(co.env, budget);
             }
-            if(!r.isnil()) {
+            if(showValue && !r.isnil()) {
                 String out = "lua= " + Json.write(r);
                 System.out.println("[console] " + out);            // full result to the terminal...
                 notice(clampMsg(out));                             // ...clamped in-game (a huge one-line result crashes the text renderer)
             }
         } catch(LuaError e) {
-            String err = "lua: " + Refusal.reason(e);
+            // trimmed: the console's watchdog stands in as the debug library, whose empty traceback LuaJ joins
+            // to the message with a newline
+            String err = (errPrefix + located(Refusal.reason(e), chunkName)).replaceAll("\\s+$", "");
             System.out.println("[console] " + err);
             if(u != null) {
                 try {
@@ -5988,6 +6045,25 @@ public final class AddonManager {
                 }
             }
         }
+    }
+
+    /**
+     * An error raised inside the chunk itself, located the way the compiler locates a syntax error. LuaJ writes
+     * a runtime error's place as the raw chunk name, the line and a space ({@code =macro:x:2 boom}), where its
+     * own compiler writes {@code macro:x:2: …}; this answers the second form for both. Any other message, a
+     * place in another chunk included, is answered as it is.
+     */
+    private static String located(String msg, String chunkName) {
+        String head = chunkName + ":";
+        if((msg == null) || !msg.startsWith(head))
+            return msg;
+        int i = head.length(), j = i;
+        while((j < msg.length()) && Character.isDigit(msg.charAt(j)))
+            j++;
+        if((j == i) || (j >= msg.length()) || (msg.charAt(j) != ' '))
+            return msg;
+        String src = chunkName.startsWith("=") ? chunkName.substring(1) : chunkName;
+        return src + ":" + msg.substring(i, j) + ": " + msg.substring(j + 1);
     }
 
     // ------------------------------------------------------------- gob resolution + snapshots

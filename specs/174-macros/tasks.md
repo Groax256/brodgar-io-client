@@ -14,7 +14,7 @@
       `[manual]`: Shift+Down twice, Ctrl+X, Ctrl+V on a later line — expect the two lines moved.
       `[manual]`: restart the client and open Macros — expect a macro made before the restart, unchanged.
 
-- [ ] **174.2 — A macro runs like `:lua`.** `AddonManager.run`, `eval` over it, `runMacro(id)`; Run
+- [x] **174.2 — A macro runs like `:lua`.** `AddonManager.run`, `eval` over it, `runMacro(id)`; Run
       saves then runs. Docs: `macros.md` (running), `runtime.md` (*The console commands*: a macro is that
       runtime). Criterion 4.
       *Its suite* `addons/174-macros.2/`, watching the System log through `session:chat()`: the

@@ -4334,7 +4334,9 @@ public final class LuaWidget {
                 return LuaValue.valueOf(((Scrollbar)w).val);
             if(w instanceof TextEntry)
                 return LuaValue.valueOf(((TextEntry)w).text());
-            if(w instanceof SListWidget)           // a list, a dropbox and a menu's inner list: the picked row
+            if(w instanceof io.brodgar.ui.CodeArea)    // 174: the Macros page's editor holds its body
+                return LuaValue.valueOf(((io.brodgar.ui.CodeArea)w).text());
+            if(w instanceof SListWidget)          // a list, a dropbox and a menu's inner list: the picked row
                 return LuaRow.of(owner, ((SListWidget<?, ?>)w).sel);
             if(w instanceof Progress)
                 return LuaValue.valueOf(((Progress)w).fraction());
