@@ -89,8 +89,8 @@ import static io.brodgar.addon.AddonManager.state;
  * character's bar after a relogin.
  *
  * <p><b>A macro is held the same way</b> (174): a {@link MacroPagina} dragged from the Macros page, or placed
- * by an addon's own bar with {@code slot:hold("macro/<id>")}, recorded as {@code macro/<id>} beside the addon
- * entries' rows. It belongs to no addon, so no teardown gives it back; with
+ * by an addon's own bar with {@code slot:hold(token)} ({@code LuaSlot} resolves the token, 175), recorded as
+ * {@code macro/<id>} beside the addon entries' rows. It belongs to no addon, so no teardown gives it back; with
  * no {@code :add} to re-apply it, {@link #restoreMacros} puts it back at the world entry and the {@code :reload},
  * and {@link #macroDeleted} ends it for good.
  *
@@ -168,16 +168,15 @@ public final class BeltHold {
     }
 
     /**
-     * <b>Hold slot {@code n} for the macro {@code entry} names</b> — {@code slot:hold("macro/<id>")}, how a bar an
-     * addon draws places the macro its {@code Drop} was handed, as the drag onto the client's own bar does (174).
-     * A {@link MacroPagina} on that character's menu, like {@link #dropped}'s. The macro is looked up outside the
+     * <b>Hold slot {@code n} for the macro of {@code macro}</b> — {@code slot:hold(token)}, how a bar an addon
+     * draws places the macro its {@code Drop} was handed, as the drag onto the client's own bar does (174).
+     * A {@link MacroPagina} on that character's menu, like {@link #dropped}'s. {@code false} where there is no such
+     * macro: the caller refuses, naming the string it was handed (175). The macro is looked up outside the
      * monitor: the first read of the list is a file read.
      */
-    static void hold(String user, int n, String entry) {
-        int macro = MacroPagina.idOf(entry);
-        if((macro < 0) || (Macros.get(macro) == null))
-            throw new LuaError("slot:hold(pagOrNil): there is no macro " + entry + " — it was deleted on the"
-                + " Macros page, or never made. A macro's identity is the res a Drop handed you, macro/<id>");
+    static boolean hold(String user, int n, int macro) {
+        if(Macros.get(macro) == null)
+            return false;
         GameUI g = AddonManager.gameui(user);
         SessionState st = (g == null) ? null : state(g.ui);
         if((g == null) || (g.belt == null) || (g.menu == null) || (st == null) || (n < 0) || (n >= g.belt.length))
@@ -187,9 +186,10 @@ public final class BeltHold {
             Hold cur = st.beltHolds.get(Integer.valueOf(n));
             if((cur != null) && (cur.pag instanceof MacroPagina) && (((MacroPagina)cur.pag).macro == macro)
                && (g.belt[n] == cur.drawn))
-                return;                         // already this macro: a hold is a state, not an event
+                return true;                    // already this macro: a hold is a state, not an event
             hold(st, g, n, new MacroPagina(g.menu, macro));
         }
+        return true;
     }
 
     /** The whole of {@link #hold}, once the bar and the session it belongs to are settled. */

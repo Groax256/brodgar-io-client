@@ -27,7 +27,7 @@ import java.util.List;
 public final class MacroPagina extends MenuGrid.Pagina {
     /** The id of the macro this stands for. */
     final int macro;
-    /** The identity on the bar, {@code macro/<id>}. */
+    /** The identity on the slot record, {@code macro/<id>}. Never Lua's: an addon reads {@link Macros#res}. */
     final String id;
 
     private Button button;

@@ -27,7 +27,7 @@
       proves the hotkey works.
       `[manual]`: none.
 
-- [ ] **175.2 — A macro's identity is a token, and its name is no addon's.**
+- [x] **175.2 — A macro's identity is a token, and its name is no addon's.**
       - **Code.** `ClientDb` gets the `token` column and its fill. `Macro.token`, `Macros.create`,
         `Macros.res` and `Macros.idOfRes` are new. Translate at `CharApi.actionbarRes`,
         `actionbarName` (`null`), `AddonWidget.dropDescriptor`, `LuaGOut`'s `resource` and

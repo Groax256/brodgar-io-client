@@ -2218,8 +2218,8 @@ final class CharApi {
      * the entry</b> (059.4): every custom entry is constructed over one shared stand-in resource, so reading
      * that resource here would report the menu's paging arrow for every held slot in the bar. What it answers
      * instead is the {@code addon/<addon id>/<id>} identity {@code pag:res()} speaks — the same string in
-     * every session, and the one {@link BeltHold} was handed. A slot held for a macro names it the same way,
-     * {@code macro/<id>} (174).
+     * every session, and the one {@link BeltHold} was handed. A slot held for a macro names it by its token,
+     * {@code macro/<token>} ({@link Macros#res}, 175): never the {@code macro/<id>} the slot record keeps.
      */
     static String actionbarRes(GameUI.BeltSlot s) {
         AddonPagina p = actionbarEntry(s);
@@ -2227,7 +2227,7 @@ final class CharApi {
             return p.id;
         MacroPagina m = actionbarMacro(s);
         if(m != null)
-            return m.id;
+            return Macros.res(m.macro);
         Resource r = actionbarResObj(s);
         return (r == null) ? null : r.name;
     }
@@ -2265,14 +2265,17 @@ final class CharApi {
         return null;
     }
 
-    /** Display name of an action-bar slot: the pagina action's name, else the resource tooltip, else nil. */
+    /**
+     * Display name of an action-bar slot: the pagina action's name, else the resource tooltip, else nil. A macro's
+     * slot has none (175): the name is the player's, and {@code slot:name()}, {@code slot:info()} and the
+     * {@code ActionbarChanged} snapshot all read it here.
+     */
     static String actionbarName(GameUI.BeltSlot s, Resource r) {
         AddonPagina custom = actionbarEntry(s);
         if(custom != null)
             return custom.name();      // the RAW string the addon set, never the tip's escaped one (059.4)
-        MacroPagina macro = actionbarMacro(s);
-        if(macro != null)
-            return macro.name();       // 174: the macro's name as the page stores it, unquoted
+        if(actionbarMacro(s) != null)
+            return null;
         if(s instanceof GameUI.PagBeltSlot) {
             try {
                 return ((GameUI.PagBeltSlot)s).pag.button().name();

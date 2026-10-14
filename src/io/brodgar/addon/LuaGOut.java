@@ -465,11 +465,10 @@ final class LuaGOut {
                 GOut d = cur; if(d == null) return NIL;
                 String name = a.arg(2).tojstring();
                 if((name == null) || name.isEmpty()) return NIL;
-                // 174: a macro's identity, the res a Drop and a held slot read, draws that macro's icon now. A
-                // deleted one draws nothing, as a bad name does.
-                int macro = MacroPagina.idOf(name);
-                if(macro >= 0) {
-                    Macro m = Macros.get(macro);
+                // 174: a macro's token, the res a Drop and a held slot read (175), draws that macro's icon now. A
+                // deleted one's, and any other macro/ string, draws nothing, as a bad name does.
+                if(name.startsWith(Macros.ENTRY)) {
+                    Macro m = Macros.get(Macros.idOfRes(name));
                     if(m == null) return NIL;
                     name = m.icon;
                 }

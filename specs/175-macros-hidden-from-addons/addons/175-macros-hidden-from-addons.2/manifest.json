@@ -1,0 +1,9 @@
+{
+  "name": "175.2 — a macro's identity is a token",
+  "id": "175-macros-hidden-from-addons.2",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 175.2: a macro dragged onto a widget hands a random lowercase token, a slot held from it reads that token and no name, every string that is no live token is refused with one message, and a failing macro's System log line carries no name.",
+  "api_version": "1.0",
+  "files": ["main.lua"]
+}

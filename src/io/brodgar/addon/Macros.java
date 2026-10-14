@@ -1,5 +1,6 @@
 package io.brodgar.addon;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -13,6 +14,10 @@ import java.util.List;
  *
  * <p><b>Unavailable file.</b> The list is what the file held (nothing, when it could not be read), and writes
  * are kept in memory for the session: a macro added then takes the next id after the highest held.
+ *
+ * <p><b>The boundary with Lua</b> (175) is {@link #res} and {@link #idOfRes}: an addon is handed a macro's
+ * {@link Macro#token}, never its id, and every string it hands back is resolved here. A token is minted in Java
+ * ({@link #mint}), never in SQL, so a macro kept in memory has one too.
  */
 public final class Macros {
     /**
@@ -23,13 +28,17 @@ public final class Macros {
     public static final String ICON = "gfx/hud/curs/wrench";
     /** The longest body a macro holds, in characters. */
     public static final int MAX_BODY = 65536;
-    /** The prefix of a macro's identity on the action bar, {@code macro/<id>}. */
+    /**
+     * The prefix of both identities: {@code macro/<id>}, the client's own on the slot record, and
+     * {@code macro/<token>}, the one an addon reads ({@link #res}). A token is never a number, so the two never meet.
+     */
     public static final String ENTRY = "macro/";
     /** The name {@link #create} gives a new macro. */
     public static final String NEW_NAME = "New macro";
 
     private static volatile List<Macro> list = null;
     private static volatile int gen = 0;
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private Macros() {}
 
@@ -63,16 +72,54 @@ public final class Macros {
         return gen;
     }
 
-    /** A new macro, {@link #NEW_NAME} with {@link #ICON} and an empty body, at the end of the list. */
+    /**
+     * <b>The identity an addon reads</b> for the macro of {@code id}, {@code macro/<token>}: what a held slot's
+     * {@code slot:res()} answers and a {@code Drop} hands. {@code null} once the macro is deleted.
+     */
+    public static String res(int id) {
+        Macro m = get(id);
+        return (m == null) ? null : ENTRY + m.token;
+    }
+
+    /**
+     * <b>The macro an addon's string names</b>: the id of the live macro whose {@code macro/<token>} it is, or
+     * {@code -1} for every other string — a deleted macro's token, {@code macro/<id>} and anything mistyped alike,
+     * so nothing an addon passes tells one miss from another.
+     */
+    public static int idOfRes(String res) {
+        if((res == null) || !res.startsWith(ENTRY))
+            return -1;
+        String token = res.substring(ENTRY.length());
+        for(Macro m : all()) {
+            if(m.token.equals(token))
+                return m.id;
+        }
+        return -1;
+    }
+
+    /** A new token: 16 bytes of {@link SecureRandom} as 32 lowercase hex characters. */
+    static String mint() {
+        byte[] bytes = new byte[16];
+        RANDOM.nextBytes(bytes);
+        StringBuilder out = new StringBuilder(32);
+        for(byte b : bytes) {
+            out.append(Character.forDigit((b >> 4) & 0xf, 16));
+            out.append(Character.forDigit(b & 0xf, 16));
+        }
+        return out.toString();
+    }
+
+    /** A new macro, {@link #NEW_NAME} with {@link #ICON}, an empty body and a fresh token, at the end of the list. */
     public static synchronized Macro create() {
         List<Macro> cur = all();
-        int id = ClientDb.macroAdd(NEW_NAME, ICON, "");
+        String token = mint();
+        int id = ClientDb.macroAdd(token, NEW_NAME, ICON, "");
         if(id < 0) {
             id = 1;
             for(Macro m : cur)
                 id = Math.max(id, m.id + 1);
         }
-        Macro m = new Macro(id, NEW_NAME, ICON, "");
+        Macro m = new Macro(id, token, NEW_NAME, ICON, "");
         List<Macro> next = new ArrayList<Macro>(cur);
         next.add(m);
         swap(next);
@@ -101,7 +148,7 @@ public final class Macros {
             if(m.name.equals(name) && m.body.equals(body))
                 return m;
             ClientDb.macroSave(id, name, body);
-            Macro saved = new Macro(id, name, m.icon, body);
+            Macro saved = new Macro(id, m.token, name, m.icon, body);
             List<Macro> next = new ArrayList<Macro>(cur);
             next.set(i, saved);
             swap(next);

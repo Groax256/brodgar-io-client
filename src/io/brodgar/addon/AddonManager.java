@@ -5964,7 +5964,9 @@ public final class AddonManager {
      * <b>Run a macro</b> (174): the body of the macro of {@code id}, in the {@code :lua} console's runtime — its
      * globals, its permissions, its {@code print}, its watchdog and its error path. A chunk of statements, never
      * an expression, and its value is not shown: a {@code lua=} line on every press of a slot is noise. An error
-     * reads {@code macro:<name>:<line>: …}. A macro deleted since does nothing.
+     * reads {@code macro:<line>: …}, with no name (175): the System log is readable through {@code chat.system},
+     * and the name is the player's. The terminal keeps it, on the {@code [console] macro <name>} line. A macro
+     * deleted since does nothing.
      *
      * <p><b>Never under a tree's monitor.</b> A press — the page's Run, a slot's key — is dispatched holding the
      * character's tree, where a body building a window of the addon layer would be refused as the second tree.
@@ -5981,7 +5983,7 @@ public final class AddonManager {
         if(m == null)
             return;
         System.out.println("[console] macro " + m.name);
-        run(m.body, "=macro:" + m.name, false, "", false);
+        run(m.body, "=macro", false, "", false);
     }
 
     /** The macros asked to run from inside a tree's monitor, waiting for the step ({@link #runMacro}). */

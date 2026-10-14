@@ -60,7 +60,7 @@ From [`petal:info()`](../flowermenu.md#a-petal). `{ index = number, wire = numbe
 
 ## ActionbarSlot
 
-From [`slot:info()`](../actionbar.md#read). `nil` for an empty slot. `{ res = string?, name = string?, cooldown = number? }`: `cooldown`, `0..1` and not seconds, present only for an ability slot with a meter. On a slot [held](../actionbar.md#hold-a-slot-unprotected) for an addon's entry, `res` is that entry's `addon/<addon id>/<id>` identity and `name` the name the addon gave it. On a slot holding one of the player's [macros](../actionbar.md#a-macro-on-a-slot), `res` is `macro/<id>` and `name` the macro's name.
+From [`slot:info()`](../actionbar.md#read). `nil` for an empty slot. `{ res = string?, name = string?, cooldown = number? }`: `cooldown`, `0..1` and not seconds, present only for an ability slot with a meter. On a slot [held](../actionbar.md#hold-a-slot-unprotected) for an addon's entry, `res` is that entry's `addon/<addon id>/<id>` identity and `name` the name the addon gave it. On a slot holding one of the player's [macros](../actionbar.md#a-macro-on-a-slot), `res` is the macro's token, `macro/` and 32 lowercase hex characters, and `name` is absent.
 
 ## Pagina
 

@@ -70,7 +70,7 @@ end)
 | Source | Verb | Rule |
 |---|---|---|
 | Your own PNG | `g:image(handle, x, y [, w, h])`, `g:aimage(handle, x, y, ax, ay)` | Load it with [`hafen.asset`](../asset/README.md) and blit the handle. Transparency is preserved. The PNG's pixels are design pixels: a 32×32 file is 32×32 to [`img:size()`](../asset/handles.md#image) and covers 32×32 at every interface scale. A `nil`, wrong-type or disposed handle draws nothing. The verbs never throw. |
-| The client's `.res` art | `g:resource(name, x, y [, w, h])` | Action icons, HUD pieces, the icon of an action received from [`Drop`](custom.md#drop-makes-a-widget-a-drop-target). Native size is what the client draws that resource at. `w, h` is a design-pixel box. Resolved asynchronously and cached. Draws nothing until the texture is ready, then the resource's default image layer, static, with no live sprite or cooldown sweep. A bad name draws nothing. A [macro's](../actionbar.md#a-macro-on-a-slot) `macro/<id>` draws that macro's icon, the one it has now. A deleted macro's draws nothing. |
+| The client's `.res` art | `g:resource(name, x, y [, w, h])` | Action icons, HUD pieces, the icon of an action received from [`Drop`](custom.md#drop-makes-a-widget-a-drop-target). Native size is what the client draws that resource at. `w, h` is a design-pixel box. Resolved asynchronously and cached. Draws nothing until the texture is ready, then the resource's default image layer, static, with no live sprite or cooldown sweep. A bad name draws nothing. A [macro's](../actionbar.md#a-macro-on-a-slot) token draws that macro's icon, the one it has now. A deleted macro's token, and any other `macro/` string, draws nothing. |
 
 ```lua
 local icon                                         -- loaded once, drawn every frame

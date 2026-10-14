@@ -296,15 +296,16 @@ public final class ClientDb {
     /**
      * <b>Every macro the player keeps</b> ({@link Macros}), by id — one list for the whole client, every account
      * and character. {@code null} when the file is unavailable or the read failed: the list the session then
-     * holds is not the file, and nothing writes it back.
+     * holds is not the file, and nothing writes it back. A row with no token yet (one a 174 build added) is
+     * given one here and written back, so every macro read has its token.
      */
     static List<Macro> macros() {
         return get().readMacros();
     }
 
     /** <b>Add one macro</b>; answers its id, or {@code -1} while the file is unavailable or the write failed. */
-    static int macroAdd(String name, String icon, String body) {
-        return get().writeMacroAdd(name, icon, body);
+    static int macroAdd(String token, String name, String icon, String body) {
+        return get().writeMacroAdd(token, name, icon, body);
     }
 
     /** <b>Store one macro's name and body.</b> Nothing while the file is unavailable or closed. Never throws. */
@@ -331,11 +332,11 @@ public final class ClientDb {
         }
     }
 
-    private synchronized int writeMacroAdd(String name, String icon, String body) {
+    private synchronized int writeMacroAdd(String token, String name, String icon, String body) {
         if(conn == null)
             return -1;
         try {
-            return conn.macroAdd(name, icon, body);
+            return conn.macroAdd(token, name, icon, body);
         } catch(Exception | LinkageError e) {
             fail("could not be written", e);
             return -1;
@@ -658,7 +659,11 @@ public final class ClientDb {
                     // AUTOINCREMENT: a deleted id is never handed out again, so an older build's dormant
                     // macro/<id> slot row can never come back under another macro.
                     st.execute("CREATE TABLE IF NOT EXISTS macros (id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                        + " name TEXT NOT NULL, icon TEXT NOT NULL, body TEXT NOT NULL)");
+                        + " name TEXT NOT NULL, icon TEXT NOT NULL, body TEXT NOT NULL, token TEXT)");
+                    // 175: the token an addon is handed (Macros.res), added to a file a 174 build made. Additive
+                    // too: an older build's INSERT names its own columns and leaves it NULL, which macros() fills.
+                    if(!column(st, "macros", "token"))
+                        st.execute("ALTER TABLE macros ADD COLUMN token TEXT");
                     if(have < SCHEMA)
                         st.execute("PRAGMA user_version = " + SCHEMA);
                 }
@@ -671,6 +676,17 @@ public final class ClientDb {
                 throw e;
             }
             this.c = c;
+        }
+
+        /** Whether {@code table} has a column named {@code name}. */
+        private static boolean column(java.sql.Statement st, String table, String name) throws java.sql.SQLException {
+            try(java.sql.ResultSet rs = st.executeQuery("PRAGMA table_info(" + table + ")")) {
+                while(rs.next()) {
+                    if(name.equals(rs.getString("name")))
+                        return true;
+                }
+            }
+            return false;
         }
 
         /** The one number a {@code PRAGMA} answers. */
@@ -825,24 +841,55 @@ public final class ClientDb {
             });
         }
 
-        /** Every row of {@code macros}, by id. */
+        /**
+         * Every row of {@code macros}, by id. A row with no token is given a fresh one ({@link Macros#mint}), and
+         * the token read back is the file's: a second client filling the same row first wins it for both.
+         */
         List<Macro> macros() throws java.sql.SQLException {
             List<Macro> out = new ArrayList<Macro>();
             try(java.sql.Statement st = c.createStatement();
-                java.sql.ResultSet rs = st.executeQuery("SELECT id, name, icon, body FROM macros ORDER BY id")) {
+                java.sql.ResultSet rs = st.executeQuery("SELECT id, token, name, icon, body FROM macros ORDER BY id")) {
                 while(rs.next())
-                    out.add(new Macro(rs.getInt(1), rs.getString(2), rs.getString(3), rs.getString(4)));
+                    out.add(new Macro(rs.getInt(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5)));
+            }
+            for(int i = out.size() - 1; i >= 0; i--) {
+                Macro m = out.get(i);
+                if(m.token != null)
+                    continue;
+                String token = fillToken(m.id);
+                if(token == null)
+                    out.remove(i);              // deleted by a second client between the two reads
+                else
+                    out.set(i, new Macro(m.id, token, m.name, m.icon, m.body));
             }
             return out;
         }
 
-        /** One row written; answers its id. */
-        int macroAdd(String name, String icon, String body) throws java.sql.SQLException {
+        /** The token of macro {@code id}, minted and written first when the row has none; {@code null}: no such row. */
+        private String fillToken(int id) throws java.sql.SQLException {
             try(java.sql.PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO macros (name, icon, body) VALUES (?, ?, ?)", java.sql.Statement.RETURN_GENERATED_KEYS)) {
+                    "UPDATE macros SET token = ? WHERE id = ? AND token IS NULL")) {
+                ps.setString(1, Macros.mint());
+                ps.setInt(2, id);
+                ps.executeUpdate();
+            }
+            try(java.sql.PreparedStatement ps = c.prepareStatement("SELECT token FROM macros WHERE id = ?")) {
+                ps.setInt(1, id);
+                try(java.sql.ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getString(1) : null;
+                }
+            }
+        }
+
+        /** One row written; answers its id. */
+        int macroAdd(String token, String name, String icon, String body) throws java.sql.SQLException {
+            try(java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO macros (name, icon, body, token) VALUES (?, ?, ?, ?)",
+                    java.sql.Statement.RETURN_GENERATED_KEYS)) {
                 ps.setString(1, name);
                 ps.setString(2, icon);
                 ps.setString(3, body);
+                ps.setString(4, token);
                 ps.executeUpdate();
                 try(java.sql.ResultSet rs = ps.getGeneratedKeys()) {
                     if(!rs.next())

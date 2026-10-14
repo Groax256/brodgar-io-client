@@ -62,7 +62,7 @@ end
 | The console's runtime | One Lua for `:lua` and every macro: a global one sets, the other reads. Not sandboxed: every protected verb answers. The instruction watchdog applies, a fresh budget for each run. |
 | Statements, not an expression | The body is a chunk of statements. Its value is not shown: a body of `return 5` prints nothing, where `:lua 5` answers `lua= 5`. |
 | `print` | Answers in the System channel, one line per `print`, and in full on the terminal, as in `:lua`. |
-| An error | Stops the run. The notice and its System log line read `macro:<name>:<line>: <message>`, the line counted in the body. |
+| An error | Stops the run. The notice and its System log line read `macro:<line>: <message>`, the line counted in the body. The macro's name stays out of both, since an addon reads the System log. The terminal's line names it. |
 | `:reload` | Takes back what a macro put up (windows, overlays, hotkeys, timers, subscriptions), as it does for `:lua`: they are the console's. |
 | When it runs | A press of **Run** holds the character's widget tree, so the body runs at the client's next step, where none is held: a body may build a window or reach any character's widgets with no [`hafen.timer():after(0, fn)`](api/timer.md). |
 | The terminal | Each run writes `[console] macro <name>` before the body runs. |
@@ -96,7 +96,7 @@ The page does not exist for addons. A macro runs unsandboxed, so what the page s
 | [Stylesheets](api/ui/style/README.md) | Reach none of it. The page is drawn in the stock look, as [the AddOns page](panel.md) is. |
 | [Hotkeys](api/client/keybindings.md) | While the keyboard focus is in the page or its question, no addon hotkey fires and every `binding:down()` reads `false`. A key the page does not take still reaches the client's own bindings. |
 
-On the bar, a slot holding a macro reads `macro/<id>` and the macro's name ([a macro on a slot](api/actionbar.md#a-macro-on-a-slot)), `slot:use()` runs it, and a widget's [`Drop`](api/ui/custom.md#drop-makes-a-widget-a-drop-target) reads a macro dragged onto it as `macro/<id>`. A bar the addon draws puts that macro on its slot with [`slot:hold(res)`](api/actionbar.md#placing-one-from-a-drop) and draws its icon with [`g:resource(res, ...)`](api/ui/drawing.md#images).
+On the bar, a slot holding a macro reads the macro's token, `macro/` and 32 hex characters, and no name ([a macro on a slot](api/actionbar.md#a-macro-on-a-slot)). `slot:use()` runs it, and a widget's [`Drop`](api/ui/custom.md#drop-makes-a-widget-a-drop-target) reads a macro dragged onto it as that same token. The token is random and stable for the macro's life. It names that one macro, and tells an addon neither its name, its body, nor which other macros exist. A bar the addon draws puts that macro on its slot with [`slot:hold(res)`](api/actionbar.md#placing-one-from-a-drop) and draws its icon with [`g:resource(res, ...)`](api/ui/drawing.md#images).
 
 There is no `hafen.macros()`: a macro is yours, written on this page and nowhere else.
 

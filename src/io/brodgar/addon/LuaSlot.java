@@ -70,9 +70,10 @@ import java.util.Map;
  * addon added to that character's menu — any addon's — on the bar, which reaches no server and needs no more
  * permission than drawing a HUD overlay does. It is not an assignment but a <b>hold</b> — see {@link BeltHold} — so it lands immediately
  * where {@code :res(name)} round-trips the server, and the slot's own content comes back untouched when the
- * hold ends. {@code :hold("macro/<id>")} holds it for one of the player's macros, as the drag does (174). A held
- * slot reads as the entry throughout: {@code :res()} answers the {@code addon/…} identity
- * ({@link CharApi#actionbarRes}), {@code :empty()} is false, and {@code ActionbarChanged} fires on both edges.
+ * hold ends. {@code :hold("macro/<token>")} holds it for one of the player's macros, as the drag does (174), by
+ * the token a {@code Drop} handed (175). A held slot reads as the entry throughout: {@code :res()} answers the
+ * {@code addon/…} identity or the macro's token ({@link CharApi#actionbarRes}), {@code :empty()} is false, and
+ * {@code ActionbarChanged} fires on both edges.
  *
  * <p><b>Threading.</b> Every read/write runs on the UI thread (addon tick / REPL / timer / console command);
  * {@code belt[n]} is a plain array read, but the resource-backed fields behind it are {@code Loading}-guarded
@@ -278,10 +279,11 @@ public final class LuaSlot {
                         + " slot for the entry instead: slot:hold(pag).");
                 }
                 // 174: a macro's identity, refused the same way and for the same reason. Only the player puts
-                // one on the bar, dragging its icon from the Macros page.
+                // one on the bar, dragging its icon from the Macros page. 175: by the prefix alone, whether or
+                // not the string is a live token, so the refusal tells nothing about which macros exist.
                 if((rv.type() == LuaValue.TSTRING) && rv.tojstring().trim().startsWith(Macros.ENTRY)) {
-                    throw new LuaError("slot:res(resourceName): \"" + rv.tojstring().trim() + "\" is one of the"
-                        + " player's macros, and the server has never heard of it — this verb assigns one of the"
+                    throw new LuaError("slot:res(resourceName): \"" + rv.tojstring().trim() + "\" is a macro's"
+                        + " identity, and the server has never heard of it — this verb assigns one of the"
                         + " game's own actions, by the name the server publishes. A macro goes on the bar by"
                         + " dragging its icon from the Macros page of the game menu.");
                 }
@@ -367,19 +369,26 @@ public final class LuaSlot {
                     BeltHold.release(h.user, h.index);
                     return self;
                 }
-                // 174: a macro's identity, the res a Drop hands a bar an addon draws in place of the client's.
+                // 174: a macro's token, the res a Drop hands a bar an addon draws in place of the client's.
                 // The bar has to be able to do what the drag onto the client's own bar does, and a macro has no
                 // Pagina an addon could hold; like the drag, it reaches no server and is unprotected.
+                //   175: the token is resolved here, and every miss is ONE refusal -- a deleted macro's token,
+                // the client's own macro/<id>, a guess -- so no string tells which macros exist.
                 if((v.type() == LuaValue.TSTRING) && v.tojstring().startsWith(Macros.ENTRY)) {
-                    BeltHold.hold(h.user, h.index, v.tojstring());
+                    String res = v.tojstring();
+                    int macro = Macros.idOfRes(res);
+                    if((macro < 0) || !BeltHold.hold(h.user, h.index, macro))
+                        throw new LuaError("slot:hold(pagOrNil): there is no macro \"" + res + "\": it was"
+                            + " deleted on the Macros page, or never was. A macro's identity is the res a Drop"
+                            + " handed you when the player dragged it onto your widget");
                     return self;
                 }
                 LuaPagina ph = LuaPagina.resolve(v);
                 if(ph == null)
                     throw new LuaError("slot:hold(pagOrNil): expected a Pagina object (one "
                         + CharApi.MG + ":add(id) handed you, or one " + CharApi.MG + ":get(res) found for"
-                        + " an entry another addon added), a macro's identity macro/<id>, or nil to end the"
-                        + " hold, got " + v.typename());
+                        + " an entry another addon added), the res a Drop handed you for a macro, or nil to end"
+                        + " the hold, got " + v.typename());
                 // The entry has to be in THIS character's menu: an entry added to another login's grid draws
                 // nothing here, and the bar and the grid are that one character's pair. inMenu says whose it
                 // is only to say WHY it is not there; a client's-own name is refused pointing at :res(name).
