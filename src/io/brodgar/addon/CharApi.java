@@ -2232,8 +2232,8 @@ final class CharApi {
         return (r == null) ? null : r.name;
     }
 
-    /** The macro a HELD slot draws (174), or {@code null}. */
-    private static MacroPagina actionbarMacro(GameUI.BeltSlot s) {
+    /** The macro a HELD slot draws (174), or {@code null}. {@code slot:use()} asks it for the press rule (175.3). */
+    static MacroPagina actionbarMacro(GameUI.BeltSlot s) {
         if(s instanceof GameUI.PagBeltSlot) {
             MenuGrid.Pagina p = ((GameUI.PagBeltSlot)s).pag;
             if(p instanceof MacroPagina)

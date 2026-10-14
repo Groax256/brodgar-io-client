@@ -381,7 +381,13 @@ final class HookApi {
             }
             return;
         }
-        h.invoke(words);
+        // 175.3: the command typed by the player is a press on its owner — from Lua, Press.open opens nothing.
+        Press.State prev = Press.open(h.owner);
+        try {
+            h.invoke(words);
+        } finally {
+            Press.close(prev);
+        }
     }
 
     /**
@@ -592,7 +598,12 @@ final class HookApi {
             return false;                            // fast path: no addon hotkeys anywhere
         for(LuaKeyBind kb : keyBinds) {              // copy-on-write: a hotkey may :remove() itself here
             if(kb.alive && kb.matches(ev)) {
-                AddonManager.callLua(kb.owner, Addon.C_HOOK, kb.fn);
+                Press.State prev = Press.open(kb.owner);   // 175.3: the player's key on this addon
+                try {
+                    AddonManager.callLua(kb.owner, Addon.C_HOOK, kb.fn);
+                } finally {
+                    Press.close(prev);
+                }
                 return true;                         // consume: the addon bound this key
             }
         }

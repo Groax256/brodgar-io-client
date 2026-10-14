@@ -94,5 +94,5 @@ change) and `docs/client/render-gl.md`, `render-targets.md`, `world-3d.md` (shad
 - `src/io/brodgar/addon/LuaBinding.java`, `src/io/brodgar/addon/HookApi.java` (`dispatchKey`, `dispatchConsole`), `src/io/brodgar/addon/AddonManager.java` (`onGlobKey`, `runMacro`, `run`, `current`) — 1, 2, 3
 - `src/io/brodgar/addon/Macros.java`, `Macro.java`, `MacroPagina.java`, `ClientDb.java` (macros table) — 2
 - `src/io/brodgar/addon/CharApi.java` (`actionbarRes`, `actionbarName`, `actionbarSnapshot`), `LuaSlot.java` (`res`, `hold`, `use`), `AddonWidget.java` (`dropDescriptor`), `LuaGOut.java` (`resource`), `BeltHold.java` (`hold(String,int,String)`) — 2, 3
-- `src/io/brodgar/addon/WidgetSubs.java` (`fireInput`), `AddonPagina.java` (`fire`), `LuaPagina.java` (`use`), `LuaMouseGrab.java` — 3
+- `src/io/brodgar/addon/Press.java`, `WidgetSubs.java` (`fireInput`), `AddonPagina.java` (`fire`), `LuaPagina.java` (`use`), `LuaMouseGrab.java` — 3
 - `docs/client/widget-input.md` — 1

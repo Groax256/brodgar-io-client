@@ -418,7 +418,8 @@ public final class LuaSlot {
         m.set("use", new VarArgFunction() {
             public Varargs invoke(Varargs a) {
                 LuaValue self = a.arg1();
-                AddonManager.requirePermission(AddonManager.current(), Permission.ACTIONBAR_USE);
+                Addon caller = AddonManager.current();
+                AddonManager.requirePermission(caller, Permission.ACTIONBAR_USE);
                 // The modifiers are read before the bar is looked up: an argument the caller got wrong is
                 // the caller's to hear about whether or not that slot happens to be empty right now.
                 int mods = Args.optint(a, 2, "slot:use", "mods", null, 0);
@@ -435,6 +436,18 @@ public final class LuaSlot {
                     throw new LuaError("slot:use(): slot " + n + " is empty (check slot:empty() first)");
                 if(g.beltwdg == null)
                     throw new LuaError("slot:use(): no action-bar widget yet");
+                // 175.3: a macro runs in the console's Lua, so an addon runs one only on the player's press on
+                // it (Press), one per press — taken last, so a refusal above never spends it. The :lua REPL,
+                // and a macro running another, are the console already.
+                if((CharApi.actionbarMacro(g.belt[n]) != null) && (caller != AddonManager.consoleOwner)
+                   && !Press.take(caller)) {
+                    if(Press.spent(caller))
+                        throw new LuaError("slot:use(): one press runs one macro, and this press already ran"
+                            + " one. A second macro needs a second press");
+                    throw new LuaError("slot:use() runs a macro only inside the player's press on your addon (a"
+                        + " MouseDown on a widget you built, a Pressed of your control, your hotkey, your console"
+                        + " command, your menu entry): call it in that handler");
+                }
                 // The bar's own button presses it (D-009): GameUI.ResBeltSlot composes the
                 // wdgmsg("belt", n, button, mods) from the Interaction, so those are the values Wire's
                 // "belt" row is handed.

@@ -51,7 +51,7 @@
       `slot:hold(nil)` restores the slot.
       `[manual]`: the drop square shows the macro's wrench icon. Expect: the wrench, drawn whole.
 
-- [ ] **175.3 — Running a macro needs the player's press on your addon.**
+- [x] **175.3 — Running a macro needs the player's press on your addon.**
       - **Code.** Add `Press` (`open`, `close`, `take`). Open it at `WidgetSubs.fireInput`
         (`MouseDown`, own widget), `Controls.fire` (`Pressed`), `HookApi.dispatchKey`,
         `HookApi.dispatchConsole` and `AddonPagina.fire`, and only while `AddonManager.current()` is

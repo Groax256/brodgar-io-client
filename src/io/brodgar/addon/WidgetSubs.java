@@ -104,6 +104,12 @@ final class WidgetSubs {
      * bare {@code hafen.ui():widget()}'s root is the content — so nothing else changes address.
      */
     private final Widget inwdg;
+    /**
+     * <b>Is this a widget the addon built?</b> (175.3) — resolved with {@link #inwdg}, from the same test. A
+     * {@code MouseDown} on one is the player's press on this addon ({@link Press}); one on a borrowed widget is
+     * not, or a subscription on the map would license a macro on every click of the world.
+     */
+    private final boolean own;
     final Subs subs;
     /** {@code key → the ONE engine listener installed for it}, or absent when nobody currently subscribes. */
     private final Map<String, EventHandler<Widget.Event>> installed =
@@ -135,6 +141,7 @@ final class WidgetSubs {
         this.wdg = wdg;
         Owned content = LuaWidget.ownedContent(owner, wdg);
         this.inwdg = (content != null) ? content.widget() : wdg;
+        this.own = (content != null);
         this.subs = new Subs(owner, new Subs.Cats() {
             public int cat(String key) {   // 041.4: Draw/Cell paint, everything else here is widgets (plan.md)
                 return (key.equals("Draw") || key.equals("Cell")) ? Addon.C_DRAW : Addon.C_WIDGET;
@@ -205,12 +212,20 @@ final class WidgetSubs {
     /**
      * Run the engine's own pre-hook: build the {@code ev}, fire every Lua handler on {@code key} (in
      * registration order, all of them, even after one cancels — {@link Subs#fire}'s OR rule), and answer
-     * whether to short-circuit {@link Widget#handle} the way {@code ev:preventDefault()} asked to.
+     * whether to short-circuit {@link Widget#handle} the way {@code ev:preventDefault()} asked to. A
+     * {@code MouseDown} on a widget of this addon's own is fired inside the player's {@link Press} on it.
      */
     private boolean fireInput(String key, Widget.Event ev) {
         Subs.Cancel c = new Subs.Cancel();
         LuaValue evObj = LuaEvent.input(owner, key, (Widget.PointerEvent)ev, c);
-        return subs.fire(key, c, evObj);
+        if(!own || !(ev instanceof Widget.MouseDownEvent))
+            return subs.fire(key, c, evObj);
+        Press.State prev = Press.open(owner);
+        try {
+            return subs.fire(key, c, evObj);
+        } finally {
+            Press.close(prev);
+        }
     }
 
     // ---- the borrowed capability keys (061.1) -------------------------------------------------------

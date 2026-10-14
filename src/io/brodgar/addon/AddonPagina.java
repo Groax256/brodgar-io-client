@@ -196,11 +196,19 @@ public final class AddonPagina extends MenuGrid.Pagina {
      * {@link AddonManager#callLua}. The handler is handed the entry itself, so one function can serve several
      * buttons and still tell which was pressed. An entry nobody subscribed to does nothing at all, which is
      * what makes a bare {@code :add(id)} a legal thing to leave in the menu.
+     *
+     * <p>The player's click or key is a {@link Press} on the entry's owner (175.3); {@code pag:use()} and a
+     * {@code slot:use()} on a held slot come through here with Lua on the stack, and open none.
      */
     void fire() {
         if(!subs.has(PRESSED))
             return;
-        subs.fire(PRESSED, LuaPagina.of(owner, user, id));
+        Press.State prev = Press.open(owner);
+        try {
+            subs.fire(PRESSED, LuaPagina.of(owner, user, id));
+        } finally {
+            Press.close(prev);
+        }
     }
 
     /**

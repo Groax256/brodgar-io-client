@@ -73,7 +73,7 @@ The client sends only shapes a player could compose.
 
 | Method | Returns | Permission | Description |
 |---|---|---|---|
-| `slot:use(mods)` | the `Slot` | `actionbar.use` | Activate the slot, as a left-click on that button does. |
+| `slot:use(mods)` | the `Slot` | `actionbar.use` | Activate the slot, as a left-click on that button does. On a macro's slot, only [inside a press on your addon](#running-one-a-press-on-your-addon). |
 | `slot:res(name)` | the `Slot` | `actionbar.res` | Assign an action by resource name, as dragging it off the menu grid does. |
 | `slot:clear()` | the `Slot` | `actionbar.clear` | Empty the slot, as a right-click on that button does. |
 
@@ -167,7 +167,7 @@ end)                                         -- if it was on that bar, it is on 
 
 ## A macro on a slot
 
-The player's [macros](../macros.md) stand on the bar as an entry does: the player drags one from the Macros page onto a slot, and the client holds the slot for it. A macro's slot reads as a token: your addon never learns which macros exist, nor their names or bodies. It reads such a slot, presses it and can release it, and places one with `slot:hold(token)`, the token [a bar you draw](#placing-one-from-a-drop) receives from the player's drag.
+The player's [macros](../macros.md) stand on the bar as an entry does: the player drags one from the Macros page onto a slot, and the client holds the slot for it. A macro's slot reads as a token: your addon never learns which macros exist, nor their names or bodies. It reads such a slot, runs it [on the player's press](#running-one-a-press-on-your-addon) and can release it, and places one with `slot:hold(token)`, the token [a bar you draw](#placing-one-from-a-drop) receives from the player's drag.
 
 ```lua
 for _, slot in ipairs(hafen.session():current():actionbar():list("macro/")) do
@@ -182,7 +182,7 @@ end
 | `slot:empty()` | `false`. |
 | `slot:hold()` | `nil`: a macro is no `Pagina` of yours or any addon's. |
 | `slot:hold(nil)` | Releases it, as a right-click does. |
-| `slot:use(mods)` | Runs the macro, as its key does (`actionbar.use`). |
+| `slot:use(mods)` | Runs the macro, as its key does (`actionbar.use`), only inside the player's press on your addon, one macro a press ([the rule](#running-one-a-press-on-your-addon)). Elsewhere it raises before anything runs. |
 | `slot:info()` | [`ActionbarSlot`](types/ui.md#actionbarslot) with that `res` and no `name`. |
 
 | Rule | Detail |
@@ -193,6 +193,26 @@ end
 | Endings | [When a hold ends](#when-a-hold-ends) holds for a macro. Deleting the macro on its page is one more ending: every slot it stands in goes back to the server's content, and the record is forgotten on every character. |
 | Remembered | Per character, in the same record as the entries: the macro is back in its slot, under the same token, at the next world entry and after a `:reload`. Renaming it or editing its body keeps every slot. |
 | Refused | `slot:res(token)` raises naming the drag from the Macros page, before the permission is asked, for every `macro/` string. `slot:hold(string)` raises that there is no such macro, naming the string, for every `macro/` string that is no live macro's token. A deleted macro's token, `macro/1` and a guess read the same, so a refusal tells nothing about which macros exist. |
+
+### Running one: a press on your addon
+
+A macro runs in the console's Lua, outside every addon's sandbox. So `slot:use()` on a macro's slot runs it only while your addon is handling the player's own press on it: call it in that handler, before it returns.
+
+| Rule | Detail |
+|---|---|
+| A press on your addon | A `MouseDown` on a widget your addon built, a `Pressed` of a control it built, its [hotkey](client/keybindings.md) going down, its [console command](console.md) typed by the player, its [menu entry](menugrid.md#a-click-runs-your-lua) pressed by the player from the grid or from its slot on the bar. |
+| Not a press | A subscription on a widget the client built (a `MouseDown` on the map included), a [mouse grab](ui/mouse.md#the-grab), a timer (one set inside a press included), an `Update`, a bus event, and a press made by code: `hafen.console():run`, `pag:use()`, `slot:use()`. |
+| One press, one macro | The first `slot:use()` on a macro's slot spends the press. Every handler of that one press shares it, so a second macro raises. |
+| Every other slot | Unchanged: an action's, an item's or an entry's slot runs from anywhere, under `actionbar.use`. |
+| The player's own key and click | On the client's bar they run the macro as always. |
+| The console | A `:lua` line, and a macro, run any macro's slot at any moment: they are the console. |
+
+| Refusal | Message names |
+|---|---|
+| `slot:use()` on a macro's slot outside a press on your addon | That it runs a macro only inside the player's press on your addon, and the doors above. |
+| A second `slot:use()` on a macro's slot in the same press | That one press runs one macro. |
+
+Both come after the permission, `mods` and the slot are checked, and before anything runs.
 
 ### Placing one from a `Drop`
 
@@ -212,6 +232,9 @@ end)
 button:on("Draw", function(draw_event)
   if slot:res() then draw_event:g():resource(slot:res(), 1, 1, 32, 32) end   -- a macro's res draws its icon
 end)
+button:on("MouseDown", function(mouse_event)
+  if mouse_event:button() == 1 and slot:res() then slot:use() end   -- the player's press runs it
+end)
 ```
 
 | Rule | Detail |
@@ -219,7 +242,7 @@ end)
 | As the drag | The slot is held exactly as the drag onto the client's own bar holds it: unprotected, nothing sent, `ActionbarChanged` on both edges, remembered per character. |
 | A right-click on your bar | Is yours to handle. End a macro's slot with `slot:hold(nil)`: `slot:clear()` clears the server's content under it. `slot:hold()` is `nil` there, so test `slot:res()` for `macro/`. |
 | A token kept past its macro | Once the player deletes the macro, `slot:hold(res)` with its token raises that there is no such macro, naming it, and `g:resource(res, ...)` draws nothing. |
-| Pressing | `slot:use()` runs the macro, as its key does (`actionbar.use`). |
+| Pressing | `slot:use()` runs the macro, as its key does (`actionbar.use`), in the handler of the player's press on your bar: a `MouseDown` on the button you drew, or your hotkey for it. One macro a press. From a timer, an `Update` or any other moment it raises that it runs only inside the player's press ([the rule](#running-one-a-press-on-your-addon)). |
 
 ---
 

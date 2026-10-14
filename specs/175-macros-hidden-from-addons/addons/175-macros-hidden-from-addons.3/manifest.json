@@ -1,0 +1,10 @@
+{
+  "name": "175.3 — running a macro needs the player's press",
+  "id": "175-macros-hidden-from-addons.3",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 175.3: slot:use() on a macro's slot is refused from a timer and from a MouseDown on the map, runs once inside the suite's own button press and refuses a second run there, leaves a slot held for a menu entry unchanged, and the player's own bar key still runs the macro.",
+  "api_version": "1.0",
+  "permissions": ["actionbar.use"],
+  "files": ["main.lua"]
+}

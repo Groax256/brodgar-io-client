@@ -486,6 +486,9 @@ final class Controls {
      * <p><b>A {@code "Changed"} on a bound control is the option's write first</b> (140.3, {@link Binding#push}):
      * the option takes the control's own value ahead of the control's handlers, so a handler on either side
      * reads the two in step.
+     *
+     * <p><b>A {@code "Pressed"} is the player's press on the control's owner</b> (175.3,
+     * {@link io.brodgar.addon.Press} — spelled out, since {@link Press} here is the capability marker).
      */
     static void fire(Owned c, String key, LuaValue... args) {
         if(c.dead())
@@ -493,8 +496,18 @@ final class Controls {
         if(LuaOption.CHANGED.equals(key))
             Binding.push(c);
         WidgetSubs s = c.profOwner().widgetSubsOrNull(c.widget());
-        if(s != null)
+        if(s == null)
+            return;
+        if(!"Pressed".equals(key)) {
             s.subs.fire(key, args);
+            return;
+        }
+        io.brodgar.addon.Press.State prev = io.brodgar.addon.Press.open(c.profOwner());
+        try {
+            s.subs.fire(key, args);
+        } finally {
+            io.brodgar.addon.Press.close(prev);
+        }
     }
 
     // ------------------------------------------------------------------ the borrowed capability keys (061.1)
