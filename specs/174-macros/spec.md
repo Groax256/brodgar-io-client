@@ -81,11 +81,14 @@ owns" docs/addons` → `api/actionbar.md:112`, which changes. `grep -rln "game m
 - `src/io/brodgar/addon/ui/MacroPanel.java` (Run, `MacroIcon`) — 2, 3
 - `src/io/brodgar/addon/AddonManager.java` (`eval`, `console`, `consoleStdout`, the world-entry restore) — 2, 3
 - `src/io/brodgar/addon/Sandbox.java` — 2
-- `src/io/brodgar/addon/BeltHold.java` — 3
-- `src/io/brodgar/addon/AddonPagina.java`, `src/io/brodgar/addon/LuaSlot.java`, `src/io/brodgar/addon/CharApi.java` — 3
+- `src/io/brodgar/addon/BeltHold.java`, `src/io/brodgar/addon/MacroPagina.java` — 3, 4
+- `src/io/brodgar/addon/AddonPagina.java`, `src/io/brodgar/addon/LuaSlot.java`, `src/io/brodgar/addon/CharApi.java` — 3, 4
+- `src/io/brodgar/addon/LuaGOut.java` (`g:resource`) — 4
+- `../brodgar-io-client-addons/actionbars/bars.lua` (its `Drop` and right-click) — 4
 - `src/haven/GameUI.java` (`BeltSlot`, `PagBeltSlot`, `Belt.dropthing`), `src/haven/MenuGrid.java` (`Pagina`, `PagButton`, `dragging`), `src/haven/DropTarget.java` — 3
 - `src/io/brodgar/addon/AddonWidget.java` (`dropDescriptor`) — 3
-- `docs/addons/api/actionbar.md`, `docs/addons/api/ui/custom.md`, `docs/addons/api/types/ui.md` — 3
+- `docs/addons/api/actionbar.md`, `docs/addons/api/ui/custom.md`, `docs/addons/api/types/ui.md` — 3, 4
+- `docs/addons/api/ui/drawing.md`, `docs/addons/macros.md` — 4
 - `docs/addons/runtime.md` — 2
 - `docs/addons/panel.md`, `docs/addons/README.md`, `docs/addons/api/ui/widget.md` — 1
 - `docs/client/ui-panels.md` — 1; `docs/client/widget-input.md` — 3

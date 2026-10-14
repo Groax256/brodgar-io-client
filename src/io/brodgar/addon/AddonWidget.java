@@ -427,7 +427,8 @@ final class AddonWidget extends Widget implements DropTarget, Owned {
      * <p><b>A custom entry names itself</b> (059.3), like everywhere else: its backing {@link Resource} is a
      * stand-in shared by every one of them, so reading {@code pag.res} here would report the paging arrow to
      * every widget in the client. Its {@code addon/<addon id>/<id>} identity is stable across a relog and is
-     * exactly what {@code pag:res()} and {@code s:menugrid():get(key)} speak.
+     * exactly what {@code pag:res()} and {@code s:menugrid():get(key)} speak. A macro dragged from the Macros
+     * page names itself the same way, {@code macro/<id>}: what {@code slot:res()} reads on a slot holding it.
      */
     private static LuaValue dropDescriptor(Object thing) {
         if(thing instanceof MenuGrid.Pagina) {
@@ -436,6 +437,10 @@ final class AddonWidget extends Widget implements DropTarget, Owned {
             d.set("kind", LuaValue.valueOf("pagina"));
             if(pag instanceof AddonPagina) {
                 d.set("res", LuaValue.valueOf(((AddonPagina)pag).id));
+                return d;
+            }
+            if(pag instanceof MacroPagina) {       // 174: a macro dragged from the Macros page
+                d.set("res", LuaValue.valueOf(((MacroPagina)pag).id));
                 return d;
             }
             if(pag instanceof AddonsCategory) {    // 162: the client's own, over the same stand-in

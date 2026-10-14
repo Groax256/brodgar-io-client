@@ -88,6 +88,11 @@ import static io.brodgar.addon.AddonManager.state;
  * thread. The placements are re-read per character ({@link #restore}): a slot index means another
  * character's bar after a relogin.
  *
+ * <p><b>A macro is held the same way</b> (174): a {@link MacroPagina} dragged from the Macros page, placed as
+ * {@code macro/<id>} beside the addon entries' rows. It belongs to no addon, so no teardown gives it back; with
+ * no {@code :add} to re-apply it, {@link #restoreMacros} puts it back at the world entry and the {@code :reload},
+ * and {@link #macroDeleted} ends it for good.
+ *
  * <p><b>Lock order.</b> The file is read and written <b>outside this class's monitor</b>: the rows are
  * gathered under it, handed to {@link ClientDb} outside it, and what was read is installed under it again.
  * {@link ClientDb} runs no Lua and calls nothing here, so nothing could wait on this monitor from inside its
@@ -101,7 +106,8 @@ public final class BeltHold {
      * slot back where it was borrowed from instead of into whichever HUD happens to be drawn when it arrives.
      */
     static final class Hold {
-        final AddonPagina pag;
+        /** An addon's {@link AddonPagina}, or a {@link MacroPagina} (174). */
+        final MenuGrid.Pagina pag;
         /** The HUD whose {@code belt} this hold is written into. Goes with its session's state. */
         final GameUI gui;
         /**
@@ -112,7 +118,7 @@ public final class BeltHold {
         /** What we put in {@code belt[n]} — the identity guard: only our own write is ever taken back out. */
         final GameUI.BeltSlot drawn;
 
-        Hold(AddonPagina pag, GameUI gui, GameUI.BeltSlot displaced, GameUI.BeltSlot drawn) {
+        Hold(MenuGrid.Pagina pag, GameUI gui, GameUI.BeltSlot displaced, GameUI.BeltSlot drawn) {
             this.pag = pag;
             this.gui = gui;
             this.displaced = displaced;
@@ -125,7 +131,8 @@ public final class BeltHold {
 
     /**
      * The entry a slot is being held for, or {@code null} for every slot the server owns — the read half of
-     * {@code slot:hold()}, on the bar the Slot names, like every other read on {@code LuaSlot}.
+     * {@code slot:hold()}, on the bar the Slot names, like every other read on {@code LuaSlot}. A slot held for
+     * a macro answers {@code null} too: a macro is no entry an addon holds a {@code Pagina} of (174).
      */
     static synchronized AddonPagina held(String user, int n) {
         GameUI g = AddonManager.gameui(user);      // 077.3: the bar the Slot names, not the drawn one
@@ -133,7 +140,12 @@ public final class BeltHold {
         if(st == null)
             return null;
         Hold h = st.beltHolds.get(Integer.valueOf(n));
-        return (h == null) ? null : h.pag;
+        return ((h == null) || !(h.pag instanceof AddonPagina)) ? null : (AddonPagina)h.pag;
+    }
+
+    /** The identity a held pagina is placed by: {@code addon/<addon id>/<id>}, or {@code macro/<id>}. */
+    private static String entry(MenuGrid.Pagina pag) {
+        return (pag instanceof MacroPagina) ? ((MacroPagina)pag).id : ((AddonPagina)pag).id;
     }
 
     /**
@@ -155,7 +167,7 @@ public final class BeltHold {
     }
 
     /** The whole of {@link #hold}, once the bar and the session it belongs to are settled. */
-    private static synchronized void hold(SessionState st, GameUI g, int n, AddonPagina pag) {
+    private static synchronized void hold(SessionState st, GameUI g, int n, MenuGrid.Pagina pag) {
         Integer key = Integer.valueOf(n);
         Hold cur = st.beltHolds.get(key);
         if((cur != null) && (cur.pag == pag) && (g.belt[n] == cur.drawn))
@@ -164,7 +176,7 @@ public final class BeltHold {
         GameUI.BeltSlot drawn = new GameUI.PagBeltSlot(n, pag);
         g.belt[n] = drawn;
         st.beltHolds.put(key, new Hold(pag, g, displaced, drawn));
-        place(st, n, pag.id);                   // 059.5: and this is where that entry belongs, from now on
+        place(st, n, entry(pag));               // 059.5: and this is where that entry belongs, from now on
         AddonManager.onBeltSet(g, n);           // ActionbarChanged for the taking edge, on the next tick
     }
 
@@ -253,14 +265,27 @@ public final class BeltHold {
     }
 
     /**
-     * A drag from the menu grid dropped on slot {@code n} ({@code GameUI.Belt.dropthing}). {@code true} when
-     * this is an addon's own entry and the layer took it, or the client's own AddOns category, which it
-     * swallows — the drop then <b>sends nothing</b>, where the stock body would {@code wdgmsg("setbelt", …)} a
-     * name the server has never heard of and drop it silently.
+     * A drag from the menu grid, or from the Macros page, dropped on slot {@code n}
+     * ({@code GameUI.Belt.dropthing}). {@code true} when this is an addon's own entry or a macro and the layer
+     * took it, or the client's own AddOns category, which it swallows — the drop then <b>sends nothing</b>,
+     * where the stock body would {@code wdgmsg("setbelt", …)} a name the server has never heard of and drop it
+     * silently.
+     *
+     * <p>A macro is held on the bar it was dropped on: a {@link MacroPagina} minted for another grid is minted
+     * again for that bar's own menu, so its press goes through the grid of the character whose slot it is.
      */
     public static boolean dropped(GameUI g, int n, MenuGrid.Pagina pag) {
         if(pag instanceof AddonsCategory)   // 162: the server has never heard of it, and it holds no slot
             return true;                    //   of its own either -- the drop does nothing and sends nothing
+        if(pag instanceof MacroPagina) {
+            SessionState st = (g == null) ? null : state(g.ui);
+            if((st == null) || (g.belt == null) || (g.menu == null) || (n < 0) || (n >= g.belt.length))
+                return true;                // 174: a macro is never sent, wherever it lands
+            if(pag.scm != g.menu)
+                pag = new MacroPagina(g.menu, ((MacroPagina)pag).macro);
+            hold(st, g, n, pag);
+            return true;
+        }
         if(!(pag instanceof AddonPagina))
             return false;
         // 073.3: the bar the drop landed on, and no other. A bar with no session behind it can hold no
@@ -269,7 +294,7 @@ public final class BeltHold {
         SessionState st = (g == null) ? null : state(g.ui);
         if((st == null) || (g.belt == null) || (n < 0) || (n >= g.belt.length))
             return false;
-        hold(st, g, n, (AddonPagina)pag);
+        hold(st, g, n, pag);
         return true;
     }
 
@@ -449,15 +474,79 @@ public final class BeltHold {
 
     /**
      * The slots held for one entry, or by one addon. A copy taken under the monitor: {@link #release} takes
-     * the monitor itself, and it writes the very map this walks.
+     * the monitor itself, and it writes the very map this walks. A slot held for a macro is no addon's, so a
+     * teardown — the console's at a {@code :reload} included — never gives one back.
      */
     private static synchronized List<Integer> slotsOf(SessionState st, AddonPagina pag, Addon owner) {
         List<Integer> out = new ArrayList<Integer>();
         for(Map.Entry<Integer, Hold> e : st.beltHolds.entrySet()) {
             Hold h = e.getValue();
-            if((pag != null) ? (h.pag == pag) : (h.pag.owner == owner))
+            if((pag != null) ? (h.pag == pag)
+               : ((h.pag instanceof AddonPagina) && (((AddonPagina)h.pag).owner == owner)))
                 out.add(e.getKey());
         }
         return out;
+    }
+
+    // ---- macros on the bar (174) -----------------------------------------------------------------------
+
+    /**
+     * <b>Put this character's macros back on its bar</b> — every slot placed for a {@code macro/<id>} whose
+     * macro exists, from the world entry and from a {@code :reload}, right after {@link #restore} read the
+     * placements. A macro has no {@code :add} to re-apply it, so this is that call. A slot already held for the
+     * same macro is left as it is; a placement whose macro is gone stays dormant.
+     */
+    static void restoreMacros(SessionState st, GameUI g) {
+        if((st == null) || (g == null) || (g.belt == null) || (g.menu == null))
+            return;
+        Macros.all();                           // the list read OUTSIDE the monitor, as every file read here is
+        synchronized(BeltHold.class) {
+            restoreMacros0(st, g);
+        }
+    }
+
+    private static void restoreMacros0(SessionState st, GameUI g) {
+        // A macro held on a HUD a relogin has since replaced is a dead record: no addon's reap ends it, and left
+        // here it would hand its old bar's content to the next hold on that slot, or have the new bar's first
+        // server write for that slot take its placement with it. Dropped without a release: that bar is gone.
+        for(Iterator<Hold> i = st.beltHolds.values().iterator(); i.hasNext();) {
+            Hold h = i.next();
+            if((h.pag instanceof MacroPagina) && (h.gui != g))
+                i.remove();
+        }
+        for(Map.Entry<Integer, String> e : new ArrayList<Map.Entry<Integer, String>>(st.beltPlaced.entrySet())) {
+            int n = e.getKey().intValue();
+            int macro = MacroPagina.idOf(e.getValue());
+            if((macro < 0) || (Macros.get(macro) == null) || (n < 0) || (n >= g.belt.length))
+                continue;
+            Hold cur = st.beltHolds.get(e.getKey());
+            if((cur != null) && (cur.pag instanceof MacroPagina) && (((MacroPagina)cur.pag).macro == macro)
+               && (g.belt[n] == cur.drawn))
+                continue;                       // a :reload left it standing
+            hold(st, g, n, new MacroPagina(g.menu, macro));
+        }
+    }
+
+    /**
+     * <b>A macro was deleted</b>: give back every slot held for it, in every session, and forget where it was
+     * placed. The file's rows went with the macro ({@code ClientDb.macroDelete}), every character's at once.
+     */
+    static synchronized void macroDeleted(int macro) {
+        String id = Macros.ENTRY + macro;
+        for(SessionState st : AddonManager.allStates()) {
+            List<Integer> held = new ArrayList<Integer>();
+            for(Map.Entry<Integer, Hold> e : st.beltHolds.entrySet()) {
+                if(id.equals(entry(e.getValue().pag)))
+                    held.add(e.getKey());
+            }
+            for(Integer n : held)
+                release(st, n.intValue(), true);
+            for(Iterator<Map.Entry<Integer, String>> i = st.beltPlaced.entrySet().iterator(); i.hasNext();) {
+                if(i.next().getValue().equals(id)) {
+                    i.remove();
+                    st.beltDirty = true;
+                }
+            }
+        }
     }
 }

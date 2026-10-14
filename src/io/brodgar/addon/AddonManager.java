@@ -1714,6 +1714,7 @@ public final class AddonManager {
                                                    //   screen's
                         BeltHold.restore(st);      // 059.5: ...and this character's action-bar placements, so the
                                                    //   first :add an addon makes puts its button straight back
+                        BeltHold.restoreMacros(st, hud);   // 174: and its macros, which have no :add to do it
                         // 074.3: fired DIRECTLY and not through the session queue — this already runs on the UI
                         //   thread, and the ordering that matters is the one above it: the per-character saved
                         //   variables and the held slots are in place before any handler reads them (spec 1e).

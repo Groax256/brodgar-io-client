@@ -1,6 +1,6 @@
 # session:actionbar: The Action Bar
 
-One character's action bar (the F-key and number-key hotbar), read, activated and written through its [session](session.md). `session:actionbar()` is that character's bar, and a slot can be held for one of your own [menu entries](menugrid.md#write-unprotected).
+One character's action bar (the F-key and number-key hotbar), read, activated and written through its [session](session.md). `session:actionbar()` is that character's bar, and a slot can be held for one of your own [menu entries](menugrid.md#write-unprotected) or, by the player, for one of their [macros](#a-macro-on-a-slot).
 
 ```lua
 local session = hafen.session():current()                      -- the character on screen
@@ -56,7 +56,7 @@ actionbar:page(3)                                          -- ...and now it is 2
 | `slot:index()` | `number` | Unprotected | Its 1-based position, the number `:get(n)` takes. Always answers. |
 | `slot:wire()` | `number` | Unprotected | The raw 0-based game index the server's message carries. |
 | `slot:empty()` | `boolean` | Unprotected | Whether the slot has no content. `true` before the hotbar exists. |
-| `slot:res()` | `string \| nil` | Unprotected | The resource name of the slot's action or item. On a [held](#hold-a-slot-unprotected) slot, the entry's identity. |
+| `slot:res()` | `string \| nil` | Unprotected | The resource name of the slot's action or item. On a [held](#hold-a-slot-unprotected) slot, the entry's identity. On a [macro's](#a-macro-on-a-slot), `macro/<id>`. |
 | `slot:name()` | `string \| nil` | Unprotected | The display name, once the action's data has resolved. |
 | `slot:cooldown()` | `number \| nil` | Unprotected | The meter fraction, a [`0..1` fraction](shapes.md#units). Present only for an ability with a meter. |
 | `slot:info()` | [`ActionbarSlot`](types/ui.md#actionbarslot) `\| nil` | Unprotected | A plain-table snapshot, for logging and serialising. |
@@ -109,9 +109,9 @@ session:actionbar():get(11):hold(dig_entry)            -- the entry now draws in
 
 | Method | Returns | Permission | Description |
 |---|---|---|---|
-| `slot:hold()` | `Pagina \| nil` | Unprotected | The entry this slot is held for. `nil` for every slot the server owns, a slot holding one of the game's own actions included (`slot:res()` names that, [`session:menugrid():get(name)`](menugrid.md) is its `Pagina`). |
+| `slot:hold()` | `Pagina \| nil` | Unprotected | The entry this slot is held for. `nil` for every slot the server owns, a slot holding one of the game's own actions included (`slot:res()` names that, [`session:menugrid():get(name)`](menugrid.md) is its `Pagina`). `nil` on a slot held for a [macro](#a-macro-on-a-slot) too. |
 | `slot:hold(pagina)` | the `Slot` | Unprotected | Hold this slot for an entry an addon added to that character's menu, yours or another's. |
-| `slot:hold(nil)` | the `Slot` | Unprotected | End the hold, whoever took it. Inert on a slot nobody holds. |
+| `slot:hold(nil)` | the `Slot` | Unprotected | End the hold, whoever took it, a macro's included. Inert on a slot nobody holds. |
 
 | Rule | Detail |
 |---|---|
@@ -129,6 +129,7 @@ session:actionbar():get(11):hold(dig_entry)            -- the entry now draws in
 | `slot:hold(pagina)` for an entry another addon removed | Not in that character's menu, naming that addon. |
 | `slot:hold(7)`, `slot:hold("dig")` | Expected the `Pagina` object, or `nil`. |
 | `slot:res("addon/myaddon/dig")` | That it is an entry an addon added, pointing back at `slot:hold`. |
+| `slot:res("macro/3")` | That it is one of the player's macros, which goes on the bar by the drag from the Macros page. |
 
 ### When a hold ends
 
@@ -161,6 +162,34 @@ end)                                         -- if it was on that bar, it is on 
 | Two endings, remembered differently | Ending by hand (`slot:hold(nil)`, a right-click, the server taking the slot) says the entry no longer belongs there and the record goes. The entry going away (`:remove`, a reload, a logout) says nothing about the slot, so it waits. A `:reload` puts every button back. A player who right-clicked one off keeps it off. |
 | Disabling keeps the slots | They go back to the server's content as the addon is torn down and the rows are kept, with its options and hotkeys. Enabling puts every button back as your `:add` runs. A right-click on a kept slot forgets it. |
 | Per character | The same entry can stand in a different slot on another character. A slot held on one is not held on the next. |
+
+## A macro on a slot
+
+The player's [macros](../macros.md) stand on the bar as an entry does: the player drags one from the Macros page onto a slot, and the client holds the slot for it. Your addon reads such a slot, presses it and can release it. Only the player puts one there.
+
+```lua
+for _, slot in ipairs(hafen.session():current():actionbar():list("macro/")) do
+  hafen.log():write(slot:index() .. ": the macro " .. slot:name() .. " (" .. slot:res() .. ")")
+end
+```
+
+| On a macro's slot | Answers |
+|---|---|
+| `slot:res()` | `macro/<id>`: the macro's number, the same after a rename. |
+| `slot:name()` | The macro's name as the page stores it now. |
+| `slot:empty()` | `false`. |
+| `slot:hold()` | `nil`: a macro is no `Pagina` of yours or any addon's. |
+| `slot:hold(nil)` | Releases it, as a right-click does. |
+| `slot:use(mods)` | Runs the macro, as its key does (`actionbar.use`). |
+| `slot:info()` | [`ActionbarSlot`](types/ui.md#actionbarslot) with that `res` and `name`. |
+
+| Rule | Detail |
+|---|---|
+| Event | [`ActionbarChanged`](event/bus/character.md#character-and-status) fires as the macro takes the slot and as it leaves it. A rename fires nothing: read `slot:name()` live. |
+| No addon's | A `:reload`, or your addon disabled, leaves a macro's slot standing. |
+| Endings | [When a hold ends](#when-a-hold-ends) holds for a macro. Deleting the macro on its page is one more ending: every slot it stands in goes back to the server's content, and the record is forgotten on every character. |
+| Remembered | Per character, in the same record as the entries: the macro is back in its slot at the next world entry and after a `:reload`. Renaming it or editing its body keeps every slot. |
+| Refused | `slot:res("macro/<id>")` raises naming the drag from the Macros page, before the permission is asked. |
 
 ---
 

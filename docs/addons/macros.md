@@ -1,6 +1,6 @@
 # Macros
 
-**Macros**, on the game menu `Ctrl+O` opens, directly below **AddOns**, keeps your own snippets of Lua and runs them, without writing an addon. A macro is a name, an icon and a body. The client keeps them for itself: one list for every account and character, in `savedata/client.sqlite`, and every macro survives a restart unchanged.
+**Macros**, on the game menu `Ctrl+O` opens, directly below **AddOns**, keeps your own snippets of Lua, runs them and puts them on the action bar, without writing an addon. A macro is a name, an icon and a body. The client keeps them for itself: one list for every account and character, in `savedata/client.sqlite`, and every macro survives a restart unchanged.
 
 ---
 
@@ -16,7 +16,7 @@ The list on the left holds every macro, its icon and its name, in the order they
 | **Delete** | Asks `Delete macro "<name>"?` in a window of its own. **Yes** removes it, and the page moves to its neighbour in the list. **No** keeps it. |
 | A row | Selects that macro. A click on empty space keeps the one selected. |
 | The name | Any text. Two macros may share a name. Spaces at either end are dropped when it is stored. |
-| The icon | The placeholder, a wrench, on every macro. |
+| The icon | The placeholder, a wrench, on every macro. Drag it to put the macro [on the action bar](#on-the-action-bar). |
 
 ### What is stored without Save
 
@@ -67,9 +67,25 @@ end
 | When it runs | A press of **Run** holds the character's widget tree, so the body runs at the client's next step, where none is held: a body may build a window or reach any character's widgets with no [`hafen.timer():after(0, fn)`](api/timer.md). |
 | The terminal | Each run writes `[console] macro <name>` before the body runs. |
 
+## On the action bar
+
+Drag a macro's icon off the page onto a slot of the action bar. The slot holds the macro: it draws the macro's icon, the server is told nothing, and what the server has in that slot comes back untouched when the macro leaves it.
+
+| Rule | Detail |
+|---|---|
+| Dragging | Press the icon, move, and release over a slot. At the login screen there is no bar, and nothing drags. |
+| Pressing | The slot's key with the pointer over the map, or a click on the slot, runs the body as last stored, as **Run** does. |
+| A right-click | Takes the macro off the slot. The server's content comes back, and the slot is the server's again. |
+| Remembered | Per character, as a slot of the bar is: the macro is back in its slot at the next world entry and after a `:reload`. |
+| Renaming, editing | Every slot the macro stands in keeps it, and shows the new name. |
+| **Delete** | Takes the macro off every slot it stands in, on every character. |
+| The server writes the slot | Putting one of the game's actions there ends the macro's hold: what the server wrote stands. |
+
 ## What an addon sees
 
 The page stands in the client's tree, and a [selector](api/ui/selectors.md) reaches it as any other widget: `@MacroPanel` is the page, `@MacroRow` one row of the list, whose `label` reads the macro's name, and `@CodeArea` the editor. [`widget:text()`](api/ui/widget.md) and [`widget:value()`](api/ui/edit.md#reading-what-a-borrowed-control-holds) on the editor read the body, its lines joined by `\n`. [`widget:value(body)`](api/ui/edit.md#driving-one-protected), under `widget.value`, replaces it; the page stores it as it stores typing.
+
+On the bar, a slot holding a macro reads `macro/<id>` and the macro's name ([a macro on a slot](api/actionbar.md#a-macro-on-a-slot)), `slot:use()` runs it, and a widget's [`Drop`](api/ui/custom.md#drop-makes-a-widget-a-drop-target) reads a macro dragged onto it as `macro/<id>`.
 
 There is no `hafen.macros()`: a macro is yours, written on this page and nowhere else.
 
@@ -81,3 +97,4 @@ There is no `hafen.macros()`: a macro is yours, written on this page and nowhere
 - [The console commands](runtime.md#the-console-commands) — `:lua`, the runtime a macro runs in.
 - [Selectors](api/ui/selectors.md) — reaching a widget of the client's tree.
 - [Widget](api/ui/widget.md) — `widget:text()` and the other reads.
+- [`session:actionbar`](api/actionbar.md#a-macro-on-a-slot) — a macro's slot, as an addon reads it.

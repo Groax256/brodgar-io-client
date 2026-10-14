@@ -125,6 +125,7 @@ public final class Macros {
             return;
         ClientDb.macroDelete(id);
         swap(next);
+        BeltHold.macroDeleted(id);
     }
 
     private static void swap(List<Macro> next) {

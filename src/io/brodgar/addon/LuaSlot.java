@@ -276,6 +276,14 @@ public final class LuaSlot {
                         + " assigns one of the game's own actions, by the name the server publishes. Hold the"
                         + " slot for the entry instead: slot:hold(pag).");
                 }
+                // 174: a macro's identity, refused the same way and for the same reason. Only the player puts
+                // one on the bar, dragging its icon from the Macros page.
+                if((rv.type() == LuaValue.TSTRING) && rv.tojstring().trim().startsWith(Macros.ENTRY)) {
+                    throw new LuaError("slot:res(resourceName): \"" + rv.tojstring().trim() + "\" is one of the"
+                        + " player's macros, and the server has never heard of it — this verb assigns one of the"
+                        + " game's own actions, by the name the server publishes. A macro goes on the bar by"
+                        + " dragging its icon from the Macros page of the game menu.");
+                }
                 AddonManager.requirePermission(AddonManager.current(), Permission.ACTIONBAR_RES);
                 LuaSlot h = handle(self, "res");
                 // The TYPE (Args.str): a protected write, and 42 answers isstring() in LuaJ, so the laxer test
@@ -325,7 +333,8 @@ public final class LuaSlot {
                 return self;
             }
         });
-        // hold() reads the entry an addon is HOLDING this slot for, nil for every slot the server owns;
+        // hold() reads the entry an addon is HOLDING this slot for, nil for every slot the server owns and for
+        // one held for a macro (174: the player's, never an addon's Pagina -- hold(nil) still ends it);
         // hold(pag) holds it for an entry an addon added to that character's menu — ANY addon's, not only
         // this one's — and hold(nil) gives it back (059.4). Nothing is sent: the client draws over the slot
         // and keeps what the server has there, so the write is UNPROTECTED (like a HUD overlay) and lands

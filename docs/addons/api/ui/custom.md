@@ -218,7 +218,7 @@ end)
 
 ### `Drop` makes a widget a drop target
 
-`:on("Drop", fn)` opts the widget into the client's drag gesture. Dragging a menu-grid action onto it fires `fn(event)`:
+`:on("Drop", fn)` opts the widget into the client's drag gesture. Dragging a menu-grid action, or a macro's icon from the Macros page, onto it fires `fn(event)`:
 
 | `event` | Returns | Permission | Description |
 |---|---|---|---|
@@ -226,7 +226,9 @@ end)
 | `:thing()` | `table` | Unprotected | `{ kind = "pagina", res = "<resource name>" }`. `res` is absent only while the action's resource is still loading. |
 | `:preventDefault()` | — | Unprotected | Consumes the drop. |
 
-`res` is a plain resource name: draw its icon with [`g:resource`](drawing.md), persist it with [`hafen.store`](../store/README.md), put it on the bar with [`slot:res(name)`](../actionbar.md#write-protected). An entry an addon [added to the menu](../menugrid.md#write-unprotected) carries `addon/<addon id>/<id>` instead, stable across relogs and what [`s:menugrid():get(res)`](../menugrid.md) resolves. `g:resource` has nothing to draw for it, so read the entry's own look. Firing the dropped action is not part of `Drop`.
+The drag ends in the tree of the character it was made in, so only a widget standing there, or [in the 3D world](../virtual/README.md), receives `Drop`. A surface in the addon layer never does: hang the target under that character's HUD, `:parent(session:ui():match("@GameUI"))`.
+
+`res` is a plain resource name: draw its icon with [`g:resource`](drawing.md), persist it with [`hafen.store`](../store/README.md), put it on the bar with [`slot:res(name)`](../actionbar.md#write-protected). An entry an addon [added to the menu](../menugrid.md#write-unprotected) carries `addon/<addon id>/<id>` instead, stable across relogs and what [`s:menugrid():get(res)`](../menugrid.md) resolves. `g:resource` has nothing to draw for it, so read the entry's own look. A [macro](../actionbar.md#a-macro-on-a-slot) carries `macro/<id>`, what `slot:res()` reads on a slot holding it. Firing the dropped action is not part of `Drop`.
 
 ---
 

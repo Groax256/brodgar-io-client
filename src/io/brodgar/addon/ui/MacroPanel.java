@@ -2,6 +2,8 @@ package io.brodgar.addon.ui;
 
 import haven.Button;
 import haven.Coord;
+import haven.DropTarget;
+import haven.GSprite;
 import haven.GOut;
 import haven.Label;
 import haven.Loading;
@@ -17,6 +19,7 @@ import haven.Window;
 
 import io.brodgar.addon.AddonManager;
 import io.brodgar.addon.Macro;
+import io.brodgar.addon.MacroPagina;
 import io.brodgar.addon.Macros;
 import io.brodgar.ui.CodeArea;
 
@@ -130,12 +133,14 @@ public class MacroPanel extends OptWnd.Panel {
             name.settext(cur.name);
             area.text(cur.body);
             icon.icon = cur.icon;
+            icon.macro = cur.id;
             list.display(cur);
             status.settext("");
         } else {
             name.settext("");
             area.text("");
             icon.icon = null;
+            icon.macro = -1;
             status.settext(items.isEmpty() ? "No macros yet. Press New to make one." : "");
         }
         for(Widget w : new Widget[] {icon, name, area, save, delete, run})
@@ -252,9 +257,20 @@ public class MacroPanel extends OptWnd.Panel {
         }
     }
 
-    /** The macro's icon on the page. */
+    /**
+     * The macro's icon on the page, and the handle it is dragged by: a press and a move of a few pixels pick up
+     * a {@link MacroPagina}, drawn under the pointer as the action menu draws what it drags, and the release
+     * drops it where {@code MenuGrid}'s drag drops — so the action bar holds it, and a widget's {@code Drop}
+     * reads it. At the login screen there is no bar, and nothing is picked up.
+     */
     public static class MacroIcon extends Widget {
+        /** How far the pointer moves, pressed, before the icon is picked up. */
+        static final int DRAG_PX = 4;
         String icon;
+        int macro = -1;
+        private UI.Grab grab = null;
+        private Coord pressed = null;
+        private MacroPagina dragging = null;
 
         MacroIcon(Coord sz) {
             super(sz);
@@ -265,6 +281,55 @@ public class MacroPanel extends OptWnd.Panel {
             g.frect(Coord.z, sz);
             g.chcolor();
             drawIcon(g, icon, Coord.of(UI.scale(2)), sz.sub(UI.scale(4), UI.scale(4)));
+            final MacroPagina d = dragging;
+            if(d != null) {
+                ui.drawafter(new UI.AfterDraw() {
+                        public void draw(GOut g) {
+                            try {
+                                GSprite ds = d.button().spr();
+                                ds.draw(g.reclip(ui.mc.sub(ds.sz().div(2)), ds.sz()));
+                            } catch(Loading l) {
+                                /* drawn once it has loaded */
+                            }
+                        }
+                    });
+            }
+        }
+
+        public boolean mousedown(MouseDownEvent ev) {
+            if((ev.b != 1) || (macro < 0))
+                return super.mousedown(ev);
+            pressed = ev.c;
+            grab = ui.grabmouse(this);
+            return true;
+        }
+
+        public void mousemove(MouseMoveEvent ev) {
+            if((grab != null) && (dragging == null) && (pressed != null)
+               && (ev.c.dist(pressed) > UI.scale(DRAG_PX)))
+                dragging = MacroPagina.of(ui, macro);
+            super.mousemove(ev);
+        }
+
+        public boolean mouseup(MouseUpEvent ev) {
+            if((ev.b != 1) || (grab == null))
+                return super.mouseup(ev);
+            MacroPagina d = dragging;
+            grab.remove();
+            grab = null;
+            pressed = null;
+            dragging = null;
+            if(d != null)
+                DropTarget.dropthing(ui.root, ui.mc, d);
+            return true;
+        }
+
+        public void destroy() {
+            if(grab != null)
+                grab.remove();
+            grab = null;
+            dragging = null;
+            super.destroy();
         }
     }
 

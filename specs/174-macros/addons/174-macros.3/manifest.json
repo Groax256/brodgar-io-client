@@ -1,0 +1,10 @@
+{
+  "name": "174.3 — macros stand on the action bar",
+  "id": "174-macros.3",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 174.3: a macro dragged onto the bar holds the slot, reads as macro/<id> with its name, runs from the slot's key, follows a rename, is refused by slot:res, reaches a widget's Drop, and is released by slot:hold(nil) and by its deletion.",
+  "api_version": "1.0",
+  "permissions": ["widget.value"],
+  "files": ["main.lua"]
+}

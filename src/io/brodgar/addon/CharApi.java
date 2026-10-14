@@ -2218,14 +2218,28 @@ final class CharApi {
      * the entry</b> (059.4): every custom entry is constructed over one shared stand-in resource, so reading
      * that resource here would report the menu's paging arrow for every held slot in the bar. What it answers
      * instead is the {@code addon/<addon id>/<id>} identity {@code pag:res()} speaks — the same string in
-     * every session, and the one {@link BeltHold} was handed.
+     * every session, and the one {@link BeltHold} was handed. A slot held for a macro names it the same way,
+     * {@code macro/<id>} (174).
      */
     static String actionbarRes(GameUI.BeltSlot s) {
         AddonPagina p = actionbarEntry(s);
         if(p != null)
             return p.id;
+        MacroPagina m = actionbarMacro(s);
+        if(m != null)
+            return m.id;
         Resource r = actionbarResObj(s);
         return (r == null) ? null : r.name;
+    }
+
+    /** The macro a HELD slot draws (174), or {@code null}. */
+    private static MacroPagina actionbarMacro(GameUI.BeltSlot s) {
+        if(s instanceof GameUI.PagBeltSlot) {
+            MenuGrid.Pagina p = ((GameUI.PagBeltSlot)s).pag;
+            if(p instanceof MacroPagina)
+                return (MacroPagina)p;
+        }
+        return null;
     }
 
     /** The custom entry a HELD slot draws, or {@code null} for every slot whose content is the server's. */
@@ -2256,6 +2270,9 @@ final class CharApi {
         AddonPagina custom = actionbarEntry(s);
         if(custom != null)
             return custom.name();      // the RAW string the addon set, never the tip's escaped one (059.4)
+        MacroPagina macro = actionbarMacro(s);
+        if(macro != null)
+            return macro.name();       // 174: the macro's name as the page stores it, unquoted
         if(s instanceof GameUI.PagBeltSlot) {
             try {
                 return ((GameUI.PagBeltSlot)s).pag.button().name();

@@ -26,7 +26,7 @@
       `[manual]`: body `local x = 1` then `error("boom")` on line 2, Run — expect the error notice
       `macro:t174 two:2: boom`.
 
-- [ ] **174.3 — Macros stand on the action bar.** `MacroPagina` and its button; `MacroIcon`'s drag;
+- [x] **174.3 — Macros stand on the action bar.** `MacroPagina` and its button; `MacroIcon`'s drag;
       `BeltHold` widened (`Hold.pag`, `entry`, `slotsOf`, `held`, `dropped`), `restoreMacros` at the
       world entry and the reload, `macroDeleted` with `ClientDb.macroDelete`; `CharApi`'s two reads,
       `LuaSlot`'s `macro/` refusal, `AddonWidget.dropDescriptor`. Docs: `macros.md` (the bar),
@@ -41,3 +41,20 @@
       Delete the macro → no slot reads a `macro/` id.
       `[manual]`: drag a macro to a slot, log out and back in — expect it in that slot.
       `[manual]`: with a macro on a slot, `:reload` — expect it still there.
+
+- [ ] **174.4 — An addon's own bar takes a macro.** A bar an addon draws in place of the client's receives
+      the drag as its `Drop`, and must place, draw and release the macro. `LuaSlot.hold`: a string
+      `macro/<id>` naming an existing macro holds the slot for it (`BeltHold`, a `MacroPagina` on that
+      character's bar), unprotected like the drag; a deleted or unknown id is refused naming it; every other
+      string is refused as today. `g:resource("macro/<id>")` draws the macro's icon (`LuaGOut`'s resource
+      read). The sibling repository's `actionbars`: its drop holds a `macro/` res with `slot:hold(res)`, its
+      right-click ends a `macro/` slot with `slot:hold(nil)`, never `slot:clear()`. Docs: `api/actionbar.md`
+      (*A macro on a slot*: placing one from a `Drop`; the refusal rows), `api/ui/custom.md` (`Drop` → `hold`),
+      `api/ui/drawing.md` (`g:resource`), `macros.md` (a bar an addon draws takes the drag too).
+      *Its suite* `addons/174-macros.4/`: its own one-slot `Drop` square standing for a bar slot of the
+      session. Make `t174 four`, drag it onto the square, Done → the handler's `slot:hold(res)` leaves the slot
+      reading `res()` the id, `name()` `t174 four`, `hold()` nil; `slot:hold("macro/999999")` refused naming
+      that id; `slot:hold("dig")` still refused; `slot:hold(nil)` → `res()` no longer the id; Delete the macro.
+      `[manual]`: the square draws the macro's icon (`g:resource` of the slot's `res()`) — expect the wrench.
+      `[manual]`: with `actionbars` enabled, drag a macro onto its bar, press its key, right-click it —
+      expect the wrench drawn, the macro run, then the server's action back in that button.

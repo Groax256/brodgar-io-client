@@ -252,6 +252,15 @@ public class KeyBinding {
 	}
     }
 
+    // addon: a binding that is NOT in the registry -- for a button that must carry one (PagButton reads
+    // binding() in its constructor) but that no panel lists and no key reaches. It claims nothing, restores
+    // no stored assignment, and key() answers its default.
+    public static KeyBinding unlisted(String id, KeyMatch defkey) {
+	if(defkey == null)
+	    throw(new NullPointerException());
+	return(new KeyBinding(id, defkey, 0));
+    }
+
     // addon: DROP a binding from the registry entirely -- the counterpart get() never had, for a binding
     // whose holder is not merely going quiet but ceasing to exist. `bindings` is a process-wide map with no
     // removal, so every id ever minted stayed in it: a custom action-menu entry mints "scm/addon/<addon>/<id>"

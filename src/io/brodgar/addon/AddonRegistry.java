@@ -954,6 +954,7 @@ public final class AddonRegistry {
         StoreApi.enterWorld(st, g);                  // this character's saved vars (the scope is still valid)
         BeltHold.restore(st);                        // 150: and its held slots, read back from the client's file —
                                                      //   what the rebuilt addons' :add re-applies is what it holds
+        BeltHold.restoreMacros(st, g);               // 174: and its macros, which have no :add to do it
         fireSession("SessionEnteredWorld", who);
     }
 

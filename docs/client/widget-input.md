@@ -134,7 +134,7 @@ drop arrow ONCE in its constructor (`adda(..., 1.0, 0.5)`, right-aligned against
 
 | What | Where |
 |---|---|
-| **Drop dispatch (the source)** | `MenuGrid.mouseup` → `DropTarget.dropthing(ui.root, ui.mc, dragging)`; `dragging` = a `MenuGrid.Pagina` |
+| **Drop dispatch (the source)** | `MenuGrid.mouseup` → `DropTarget.dropthing(ui.root, ui.mc, dragging)`; `dragging` = a `MenuGrid.Pagina`. Nothing ties it to the grid: any widget can start the same drop — `ui.grabmouse(this)` on the press, the ghost drawn from its own `draw` through `ui.drawafter` (`MenuGrid.draw` reclips `dragging.button().spr()` at `ui.mc`), the static `DropTarget.dropthing` on the release — and `GameUI.Belt.dropthing` takes any `Pagina` whose `button()` and `scm` answer, a `PagBeltSlot` reaching it only through those two |
 | Generic drop interface + tree walk | `DropTarget` (`dropthing(Coord,Object)`); `Drop` event via `PointerEvent.propagation` — calls the first `DropTarget` under the cursor |
 | **The ITEM drop is a different family** | `DTarget` (`drop`/`iteminteract`), dispatched by `ItemDrag.mousedown` as `ui.dispatchq(parent, …)` — from the dragged item's OWN parent (the HUD), so it never starts at `ui.root` and never passes `MapView`. `b==1` drops, `b==3` interacts; `Inventory.drop` reads `ul = ev.c.sub(src.doff)`, so the slot is derived from the coordinate the traversal hands it |
 | Pagina → `{kind,res}` · modifiers · the native empty slot (NOT a `.res`) | `Pagina.res().name` (Loading-guarded; res-vs-id split like the belt `dropthing`) · `ui.modflags()` · `Inventory.invsq` `TexI` (code-built) + `sqsz` |
