@@ -118,6 +118,7 @@ public class MapWnd extends Window implements Console.Directory {
 	    .state(this::compact).set(a -> {
 		    compact(a);
 		    Utils.setprefb("compact-map", a);
+		    modeswitched(a);	// addon: each mode keeps its own box and place
 		})
 	    .settip("Compact mode").setgkey(kb_compact);
 	toolbar.add(new ICheckBox("gfx/hud/mmap/prov", "", "-d", "-h", "-dh") {
@@ -823,6 +824,11 @@ public class MapWnd extends Window implements Console.Directory {
 	    newfocusable(tool);
 	chdeco(a ? null : makedeco());
 	pack();
+    }
+
+    /* addon: the user flipped the compact toggle. GameUI's map puts back the box and place that mode was last
+     * given; the constructor's own compact() call is not a switch and does not come here. */
+    protected void modeswitched(boolean compact) {
     }
 
     public void recenter() {

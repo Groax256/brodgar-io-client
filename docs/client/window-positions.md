@@ -13,7 +13,7 @@
 | `wndc-equ` | `equwnd` | `place == "equ"` | the drop |
 | `wndc-chr` | `chrwdg` (`CharWnd`) | `place == "chr"` | the drop |
 | `wndc-zerg` | `zerg` (kin) | the `GameUI` constructor | the drop |
-| `wndc-map` + `wndsz-map` | `mapfile` (`MapWnd`) | `place == "mapview"`; the size is the CONTENT size, `csz()` | the drop; the box when a grip is let go |
+| `wndc-map` + `wndsz-map`, and `wndc-map-compact` + `wndsz-map-compact` | `mapfile` (`MapWnd`), the pair of the mode it is in (`compact-map`) | `place == "mapview"`, the compact pair falling back to the extended one; the size is the CONTENT size, `csz()`. Again when the compact toggle flips | the drop; the box when a grip is let go |
 | `wndc-srch` | `srchwnd` (`MenuSearch.Main`) | `place == "menu"` | the drop |
 | `wndc-icon` | `iconwnd` (`GobIcon.SettingsWindow`) | `MapMenu`'s icon button, on each open | the drop |
 | `makewndc` | the crafting window's anonymous wrapper | `place == "craft"`, on each opening | the drop |
@@ -30,7 +30,8 @@ writes `null` as the empty string, which reads back as the default.
 | What | Where |
 |---|---|
 | A place is written **when the user puts the window down**, and at no other moment | `Window.drag` notes where the drag started (`// addon:`). `Window.mouseup`, dropping the grab, calls the fork's `WndPos.dropped` when `c` moved; a press on the title bar that moved nothing writes nothing. `dropped` writes the key the window was loaded under (`WndPos.load`, or `WndPos.key` for a `ContentsWindow`, which has an id before it has a place) |
-| The map's box | `Window.resizedByHand(true)`, from the frame's grip on release and from `MapWnd.ViewFrame.mouseup` for the compact one (`// addon:`), writes the place, whose free space the new box changed. `GameUI`'s anonymous `MapWnd` subclass writes `wndsz-map` beside it |
+| The map's box | `Window.resizedByHand(true)`, from the frame's grip on release and from `MapWnd.ViewFrame.mouseup` for the compact one (`// addon:`), writes the place, whose free space the new box changed. `GameUI`'s anonymous `MapWnd` subclass writes the mode's size key beside it |
+| The compact toggle | Upstream's toolbar `ICheckBox` (`gfx/hud/mmap/wnd`) only flips `compact-map`: the window keeps its box, floored to the mode's minimum by `MapWnd.resize`. The fork's `MapWnd.modeswitched` (`// addon:`) follows it, and `GameUI`'s subclass puts back the mode's stored box and place and re-registers the window under the mode's place key (`WndPos.load`), writing nothing. A mode with no stored row keeps what the window has; a box or place an addon's layout holds (`AddonManager.sizeHeld`, `posHeld`) is left alone. The constructor's own `compact(...)` call is not a switch |
 | ⚠️ **The upstream writers are cut** | Upstream writes on a 60 s clock in `GameUI.tick` (`savewndpos`), in `cdestroy` for `wndc-misc/<id>`, in the crafting wrapper's `destroy()` for `makewndc`, and in `ContentsWindow.tick` on every change of `c`. This client removes all four (`// addon:`): a stored fraction does not change with the screen, so nothing has to catch up on a clock, a character switch or the client closing, and a session nobody touches writes nothing. A merge that brings one back must cut it again |
 
 **The store belongs to what the USER placed**: only the user's drop writes it, and a place an addon's
@@ -81,7 +82,7 @@ screen** per axis; a window touching an edge, or dropped partly past it, is stor
   pre-fork `Utils.getprefc` reads it as its default, and the leading `c` makes an earlier fork build's
   parser fail inside its own catch and default too. Two older values still load: `fx/fy` with no `c`, a
   fraction of the free space (the server's `Coord2d` rule above), placed as it was written and held as a
-  centre from then on; and `NxM`, pixels. `wndsz-map` stays pixels.
+  centre from then on; and `NxM`, pixels. `wndsz-map` and `wndsz-map-compact` stay pixels.
 - Every key above is written by the drop, `wndc-srch` and `wndc-icon` included, which upstream never
   writes.
 - `zerg` waits for the first `resize`. `ContentsWindow` resolves its place in `added()` and `wndshow`,
@@ -92,6 +93,6 @@ screen** per axis; a window touching an edge, or dropped partly past it, is stor
   `resize` it makes cannot come back round through the same line.
 - `UILoop.Frame.tick` keeps `layer.root`'s old size and runs the same re-placement over it right after
   `layer.root.resize(sz)`. `ui.root` needs none: the HUD under it re-places its own windows.
-- `AddonWidgets.stockcsz` substitutes the map's box when an addon has resized it, so `wndsz-map` records
+- `AddonWidgets.stockcsz` substitutes the map's box when an addon has resized it, so the mode's size key records
   the user's box. It substitutes rather than restores: the write runs with the addon's level standing, and
   moving the window back around it would snap a laid-out HUD.

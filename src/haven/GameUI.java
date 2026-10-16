@@ -922,6 +922,11 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	return(buf.toString());
     }
 
+    /* addon: the map window's box and place, one pair per mode. The extended mode keeps the keys an older
+     * build wrote; the compact mode reads those until the user gives it its own. */
+    private static String mapszkey(boolean compact) {return(compact ? "wndsz-map-compact" : "wndsz-map");}
+    private static String mapckey(boolean compact)  {return(compact ? "wndc-map-compact" : "wndc-map");}
+
     public Coord optplacement(Widget child, Coord org) {
 	Set<Window> closed = new HashSet<>();
 	Set<Coord> open = new HashSet<>();
@@ -1030,14 +1035,33 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		}
 		mmap = blpanel.add(new CornerMap(UI.scale(new Coord(133, 133)), file), minimapc);
 		mmap.lower();
-		mapfile = new MapWnd(file, map, Utils.getprefc("wndsz-map", UI.scale(new Coord(700, 500))), "Map") {
+		boolean mapcompact = Utils.getprefb("compact-map", false);	// addon: each mode has its own box and place
+		Coord msz = Utils.getprefc(mapszkey(mapcompact), null);
+		mapfile = new MapWnd(file, map, (msz != null) ? msz : Utils.getprefc("wndsz-map", UI.scale(new Coord(700, 500))), "Map") {
+			boolean cmode = mapcompact;
+
 			/* addon: (166) its box is written when the user lets a grip go, as its place is when they drop
-			 * it: the one window whose size the client keeps. stockcsz answers the box the user chose even
-			 * while an AddOn's size level stands on it (spec 036-ui-layout). */
+			 * it: the one window whose size the client keeps, one box per mode. stockcsz answers the box
+			 * the user chose even while an AddOn's size level stands on it (spec 036-ui-layout). */
 			public void resizedByHand(boolean done) {
 			    super.resizedByHand(done);
 			    if(done)
-				Utils.setprefc("wndsz-map", AddonWidgets.stockcsz(this));
+				Utils.setprefc(mapszkey(cmode), AddonWidgets.stockcsz(this));
+			}
+
+			/* addon: the toggle puts back what the user last gave the mode it switches to, and writes
+			 * nothing. A mode never given a box or place keeps the one the window has, as the toggle
+			 * always did; what an AddOn's layout holds stays the layout's. */
+			protected void modeswitched(boolean c) {
+			    cmode = c;
+			    Coord sz = Utils.getprefc(mapszkey(c), null);
+			    if((sz != null) && !io.brodgar.addon.AddonManager.sizeHeld(this))
+				resize(sz);
+			    if((parent != null) && !io.brodgar.addon.AddonManager.posHeld(this)) {
+				Coord nc = io.brodgar.ui.WndPos.load(parent, this, mapckey(c), io.brodgar.ui.WndPos.read(mapckey(c)), this.c);
+				if(nc != null)
+				    this.c = nc;
+			    }
 			}
 		    };
 		mapfile.reqclose(() -> {
@@ -1045,7 +1069,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		    mapfile.hide();
 		});
 		mapfile.show(Utils.getprefb("wndvis-map", false));
-		add(mapfile, io.brodgar.ui.WndPos.load(this, mapfile, "wndc-map", new Coord(50, 50)));	// addon: (166)
+		io.brodgar.ui.WndPos.Val mc = io.brodgar.ui.WndPos.read(mapckey(mapcompact));	// addon: (166), the mode's own place, else the shared one
+		add(mapfile, io.brodgar.ui.WndPos.load(this, mapfile, mapckey(mapcompact), (mc != null) ? mc : io.brodgar.ui.WndPos.read("wndc-map"), new Coord(50, 50)));
 	    }
 	} else if(place == "menu") {
 	    menu = (MenuGrid)brpanel.add(child, menugridc);

@@ -2322,6 +2322,13 @@ public final class AddonManager {
     public static boolean posHeld(Widget w) {           return UiApi.movedOwner(w, true) != null; }
 
     /**
+     * <b>Does an addon's layout hold {@code w}'s size?</b> — a size level standing on it, the twin of
+     * {@link #posHeld}. Asked by {@code GameUI}'s map when the compact toggle flips: a box an addon holds stays
+     * the addon's, and the mode's own box is not put over it.
+     */
+    public static boolean sizeHeld(Widget w) {          return UiApi.movedOwner(w, false) != null; }
+
+    /**
      * <b>A region just stood on the HUD</b> (173) — from {@code io.brodgar.ui.Region.stand}, inside the tree's
      * monitor where its painter is being added. A rule reaches a widget the moment it appears only through the
      * server's placement seam ({@link #onWidgetPlaced}), and the client mints a region for itself, so this is
