@@ -18,7 +18,7 @@
       what was missing.
       `[manual]`: footsteps were heard while you walked — expect: yes.
 
-- [ ] **177.2 — The Overlay reads refuse a surplus argument.** In `LuaOverlay.methods`, `key`, `gob`,
+- [x] **177.2 — The Overlay reads refuse a surplus argument.** In `LuaOverlay.methods`, `key`, `gob`,
       `native`, `res`, `kind`, `count`, `exists` and `info` become `VarArgFunction`s whose first line is
       `Args.only(a, 0, "overlay:<verb>")`, bodies otherwise unchanged; `sdt`'s comment drops its
       now-general sentence. No page changes: `conventions.md` already states that a surplus argument

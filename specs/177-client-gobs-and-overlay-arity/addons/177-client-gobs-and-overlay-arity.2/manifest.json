@@ -1,0 +1,9 @@
+{
+  "name": "177.2 — the Overlay reads refuse a surplus argument",
+  "id": "177-client-gobs-and-overlay-arity.2",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 177.2: overlay:key/gob/native/res/kind/count/exists/info refuse a surplus argument and still answer bare, on a native overlay and on one of yours.",
+  "api_version": "1.0",
+  "files": ["main.lua"]
+}

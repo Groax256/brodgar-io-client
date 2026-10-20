@@ -364,30 +364,34 @@ public final class LuaOverlay {
     private static LuaTable methods(final Addon owner) {
         LuaTable m = new LuaTable();
         // key() — what it answers to; answers from the handle alone, so it still reads after the gob is gone.
-        m.set("key", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("key", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                LuaValue self = Args.only(a, 0, "overlay:key");
                 return LuaValue.valueOf(handle(self, "key").key);
             }
         });
         // gob() — the Gob it is attached to (D-066: the relation, not a stored id).
-        m.set("gob", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("gob", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                LuaValue self = Args.only(a, 0, "overlay:gob");
                 LuaOverlay h = handle(self, "gob");
                 return LuaGob.of(owner, h.user, h.gob);
             }
         });
         // native() — is this one of the GAME's overlays (read-only) rather than one of ours? A hafen.virtual() entity
         // this addon stood at the gob answers FALSE: it is yours, it is simply not addressed from here.
-        m.set("native", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("native", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                LuaValue self = Args.only(a, 0, "overlay:native");
                 return LuaValue.valueOf(handle(self, "native").nat());
             }
         });
         // res() — WHAT it is drawn from: the key itself for a native one (a native key IS its resource name), the
         // .res name / asset path for a hafen.virtual() entity standing here, and nil for one of our own records (it
         // draws Lua, not a resource — which is exactly what tells a painter from a thing, from the outside).
-        m.set("res", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("res", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                LuaValue self = Args.only(a, 0, "overlay:res");
                 LuaOverlay h = handle(self, "res");
                 if(h.src == NATIVE) {
                     // audit2 B15: ...and only while it is still THERE. The key is the resource name, so it
@@ -407,8 +411,9 @@ public final class LuaOverlay {
         // entity standing here, which is also the collection that owns it; nil for a native one (the game's
         // overlays are read-only and say only that they are the game's), and nil for one of ours that has not yet
         // said what it draws.
-        m.set("kind", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("kind", new VarArgFunction() {
+            public Varargs invoke(Varargs args) {
+                LuaValue self = Args.only(args, 0, "overlay:kind");
                 LuaOverlay h = handle(self, "kind");
                 if(h.src == VIRTUAL) {
                     LuaWorldEntity e = virtual(owner, h);
@@ -562,8 +567,9 @@ public final class LuaOverlay {
         // OVERLAY IS A UNION, because the key is the resource name and a gob may carry several of one resource
         // (038.1 measured 13 of 33 such gobs) — so the multiplicity keying by name would lose is published here
         // instead. nil once it is gone.
-        m.set("count", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("count", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                LuaValue self = Args.only(a, 0, "overlay:count");
                 LuaOverlay h = handle(self, "count");
                 Gob g = AddonManager.getgob(h.user, h.gob);
                 if(g == null)
@@ -578,7 +584,7 @@ public final class LuaOverlay {
         // sdt() — the state bytes the server sent with each game overlay this entry stands for: one 1-based array
         // of 0..255 numbers per member, in arrival order, so #sdt() == count(). Never decoded: the bytes are the
         // resource's. nil for an overlay of yours and for a hafen.virtual() entity standing here (neither carries
-        // any), and once the overlay or its gob is gone. A VarArgFunction so a surplus argument is refused.
+        // any), and once the overlay or its gob is gone.
         m.set("sdt", new VarArgFunction() {
             public Varargs invoke(Varargs a) {
                 LuaOverlay h = handle(Args.only(a, 0, "overlay:sdt"), "sdt");
@@ -592,14 +598,16 @@ public final class LuaOverlay {
             }
         });
         // exists() — is it still attached? False once removed, and false once the gob itself is gone.
-        m.set("exists", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("exists", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                LuaValue self = Args.only(a, 0, "overlay:exists");
                 return LuaValue.valueOf(rec(owner, handle(self, "exists")) != null);
             }
         });
         // info() — the snapshot escape hatch, for logging: {key, native, count, height?, res?, kind?, world?, sdt?}.
-        m.set("info", new OneArgFunction() {
-            public LuaValue call(LuaValue self) {
+        m.set("info", new VarArgFunction() {
+            public Varargs invoke(Varargs args) {
+                LuaValue self = Args.only(args, 0, "overlay:info");
                 LuaOverlay h = handle(self, "info");
                 Object r = rec(owner, h);
                 if(r == null)
