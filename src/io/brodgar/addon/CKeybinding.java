@@ -3,17 +3,15 @@ package io.brodgar.addon;
 import haven.Coord;
 import haven.GOut;
 import haven.KeyBinding;
-import haven.OptWnd;
 import haven.Widget;
-
-import java.awt.event.KeyEvent;
+import io.brodgar.ui.SetButton;
 
 import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaValue;
 
 /**
- * The adapter behind {@code hafen.ui():keybinding()} — the client's own key button, {@link OptWnd.SetButton}, the very
- * class each row of Options ▸ Game ▸ Keybindings ends in, joined by {@code widget:bind(binding)} to one of the hotkeys
+ * The adapter behind {@code hafen.ui():keybinding()} — the client's key button, {@link SetButton}, the button each
+ * row of Options ▸ Game ▸ Keybindings ends in, standing outside the panel, joined by {@code widget:bind(binding)} to one of the hotkeys
  * its addon declared (spec {@code 163-keybinding-control}) or, under {@code client.settings}, to any binding the
  * addon's code may write: another addon's declared hotkey, or one of the client's own (spec
  * {@code 169-key-button-reach}). The user presses it, then a key, and the key is assigned
@@ -31,7 +29,7 @@ import org.luaj.vm2.LuaValue;
  * ends by itself, nothing assigned and nothing fired, as soon as the button stops answering ({@link #answers}):
  * disabled, unbound, hidden, or its hotkey ended.
  */
-final class CKeybinding extends OptWnd.SetButton implements Owned.Control, Controls.Value, Controls.Change {
+final class CKeybinding extends SetButton implements Owned.Control, Controls.Value, Controls.Change {
     /** The Keybindings panel's own width for a key button ({@code BindingPanel.addbtn}'s {@code UI.scale(175)}), DESIGN px. */
     static final int DEF_W = 175;
 
@@ -222,7 +220,7 @@ final class CKeybinding extends OptWnd.SetButton implements Owned.Control, Contr
      * answering false, because the grab is already closed. Otherwise the client's own handling runs, and a key that
      * moved is kept for {@link #keydown} to fire once the grab has closed.
      */
-    protected boolean handle(KeyEvent ev) {
+    protected boolean handle(KeyDownEvent ev) {
         if(!answers()) {
             cancel();
             return(false);

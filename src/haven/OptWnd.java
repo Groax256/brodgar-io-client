@@ -27,10 +27,10 @@
 package haven;
 
 import haven.render.*;
+import haven.iosys.tk.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.*;
-import java.awt.event.KeyEvent;
 
 public class OptWnd extends Window {
     public final Panel main;
@@ -593,7 +593,7 @@ public class OptWnd extends Window {
 
     // addon: was a class-init `static final Text` -- baked at class load, it could never follow a font override
     // (the F3e lesson), so it renders per use through the "tooltip" scope now (F3d, D-043).
-    private static Text kbtt() {
+    public static Text kbtt() {
 	Fonts.enter("tooltip");   // addon: (102.3) the pair -- display reads the SITE's scope
 	try {
 	    return(Widget.tipfoundry().render("$col[255,255,0]{Escape}: Cancel input\n" +
@@ -708,59 +708,44 @@ public class OptWnd extends Window {
 	    prev = adda(pb, scroll.pos("bl").adds(0, 10).x(scroll.sz.x / 2), 0.5, 0.0);
 	    pack();
 	}
-    }
 
-    /* addon: (163.1) THE KEY BUTTON, a member of OptWnd rather than of BindingPanel. Upstream nests it in the panel,
-     * an inner class, so it could only be built inside an Options window; as a static member it can stand anywhere --
-     * hafen.ui():keybinding() builds this very class on an addon's own page. `cmd` is no longer final and may be null:
-     * a button bound to nothing shows the key it last showed and writes nothing, and one an addon re-binds takes the
-     * new binding. follow() is the display half of draw(), callable at once. BindingPanel.addbtn builds it as before. */
-    public static class SetButton extends KeyMatch.Capture {
-	public KeyBinding cmd;   // addon: (163.1) was final, and never null
+	public class SetButton extends KeyMatch.Capture {
+	    public final KeyBinding cmd;
 
-	public SetButton(int w, KeyBinding cmd) {
-	    super(w, (cmd == null) ? null : cmd.key());   // addon: (163.1) bound to nothing, it reads None
-	    this.cmd = cmd;
-	}
+	    public SetButton(int w, KeyBinding cmd) {
+		super(w, cmd.key());
+		this.cmd = cmd;
+	    }
 
-	public void set(KeyMatch key) {
-	    super.set(key);
-	    if(cmd != null)   // addon: (163.1)
+	    public void set(KeyMatch key) {
+		super.set(key);
 		cmd.set(key);
-	}
+	    }
 
-	/* addon: (163.1) show the binding's key WITHOUT writing it -- the test draw() made inline, by identity as
-	 * before: KeyBinding.key() hands out one cached wrapper per key, so a new object means a new key. */
-	public void follow() {
-	    if((cmd != null) && (cmd.key() != key))
-		super.set(cmd.key());
-	}
+	    public void draw(GOut g) {
+		if(cmd.key() != key)
+		    super.set(cmd.key());
+		super.draw(g);
+	    }
 
-	public void draw(GOut g) {
-	    follow();   // addon: (163.1) was the same test, inline
-	    super.draw(g);
-	}
+	    protected KeyMatch mkmatch(KeyDownEvent ev) {
+		return(KeyMatch.forevent(ev, ~cmd.modign));
+	    }
 
-	protected KeyMatch mkmatch(KeyEvent ev) {
-	    return(KeyMatch.forevent(ev, ~((cmd == null) ? 0 : cmd.modign)));   // addon: (163.1) null-safe
-	}
-
-	protected boolean handle(KeyEvent ev) {
-	    if(ev.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
-		if(cmd != null) {   // addon: (163.1) bound to nothing, there is no default to go back to
+	    protected boolean handle(KeyDownEvent ev) {
+		if(ev.tkev().sym() == Key.Std.BACKSPACE) {
 		    cmd.set(null);
 		    super.set(cmd.key());
+		    return(true);
 		}
-		return(true);
+		return(super.handle(ev));
 	    }
-	    return(super.handle(ev));
-	}
 
-	public Object tooltip(Coord c, Widget prev) {
-	    return(kbtt().tex());   // addon: (F3d)
+	    public Object tooltip(Coord c, Widget prev) {
+		return(kbtt().tex());   // addon: (F3d)
+	    }
 	}
     }
-
 
     public static class PointBind extends Button implements CursorQuery.Handler {
 	public static final String msg = "Bind other elements...";
@@ -789,25 +774,22 @@ public class OptWnd extends Window {
 	    }
 	}
 
-	private boolean handle(KeyEvent ev) {
-	    switch(ev.getKeyCode()) {
-	    case KeyEvent.VK_SHIFT: case KeyEvent.VK_CONTROL: case KeyEvent.VK_ALT:
-	    case KeyEvent.VK_META: case KeyEvent.VK_WINDOWS:
+	private boolean handle(KeyDownEvent ev) {
+	    if(ev.tkev().key().primary(Key.Std.MODKEYS) != null)
 		return(false);
-	    }
-	    int code = ev.getKeyCode();
-	    if(code == KeyEvent.VK_ESCAPE) {
+	    if(ev.tkev().sym() == Key.Std.ESCAPE) {
 		return(true);
 	    }
-	    if(code == KeyEvent.VK_BACK_SPACE) {
+	    if(ev.tkev().sym() == Key.Std.BACKSPACE) {
 		cmd.set(null);
 		return(true);
 	    }
-	    if(code == KeyEvent.VK_DELETE) {
+	    if(ev.tkev().sym() == Key.Std.DELETE) {
 		cmd.set(KeyMatch.nil);
 		return(true);
 	    }
 	    KeyMatch key = KeyMatch.forevent(ev, ~cmd.modign);
+	    Debug.dump(key);
 	    if(key != null)
 		cmd.set(key);
 	    return(true);
@@ -857,7 +839,7 @@ public class OptWnd extends Window {
 	public boolean keydown(KeyDownEvent ev) {
 	    if(!ev.grabbed)
 		return(super.keydown(ev));
-	    if(handle(ev.awt)) {
+	    if(handle(ev)) {
 		kg.remove();
 		kg = null;
 		cmd = null;

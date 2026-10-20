@@ -786,7 +786,7 @@ final class UiApi {
                 return Controls.entry(owner, a);
             }
         });
-        // :keybinding() — 163.1, THE CLIENT'S KEY BUTTON: OptWnd.SetButton, the class each row of Options > Game >
+        // :keybinding() — 163.1, THE CLIENT'S KEY BUTTON: io.brodgar.ui.SetButton, the button each row of Options > Game >
         // Keybindings ends in, joined by :bind(binding) to one of this addon's hotkeys, so the user assigns the key
         // on the addon's own page. Built bare and configured by chained setters like every control here.
         m.set("keybinding", new VarArgFunction() {

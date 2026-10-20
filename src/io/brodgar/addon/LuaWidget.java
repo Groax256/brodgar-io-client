@@ -1716,7 +1716,7 @@ public final class LuaWidget {
                 // never been protected: it is read off the handle's own reference, which survives the widget
                 // leaving the tree, so the answer no longer depends on liveness either.
                 Owned c = ownedContent(owner, h.wdg);
-                if((c == null) && (h.wdg instanceof OptWnd.SetButton))   // 163.3: nothing drives a key button — its key
+                if((c == null) && (h.wdg instanceof haven.KeyMatch.Capture))   // 163.3: nothing drives a key button — its key
                     throw new LuaError(CKeybinding.VALUE_REFUSAL);        //   is its binding's; asked of the handle alone
                 if(c == null)                             // BORROWED (or gone): the act, and its gate
                     AddonManager.requirePermission(AddonManager.current(), Permission.WIDGET_VALUE);
@@ -1822,7 +1822,7 @@ public final class LuaWidget {
                     return self;
                 Owned c = ownedContent(owner, w);
                 if(c == null) {
-                    if(w instanceof OptWnd.SetButton)   // 163.3: the client's key button, or another addon's
+                    if(w instanceof haven.KeyMatch.Capture)   // 163.3: the client's key button, or another addon's
                         throw new LuaError(Binding.VERB + "(binding) joins a key button YOUR addon built, and this one"
                             + " is " + ((Owned.of(w) != null) ? "another addon's" : "one of the client's own")
                             + " — its key is its binding's: the user assigns it by hand, and binding:key(key) under"
@@ -4332,8 +4332,8 @@ public final class LuaWidget {
         if(secret(w))
             return LuaValue.NIL;                   // audit2 B08 (pk-02): a credential is not a value either
         try {
-            if(w instanceof OptWnd.SetButton)      // 163.3: a key button holds its key, as binding:key() spells it
-                return LuaBinding.keyName(((OptWnd.SetButton)w).key);
+            if(w instanceof haven.KeyMatch.Capture)   // 163.3: a key button holds its key, as binding:key() spells it
+                return LuaBinding.keyName(((haven.KeyMatch.Capture)w).key);
             if(w instanceof RadioGroup.RadioButton) {
                 String row = ((RadioGroup.RadioButton)w).checked();
                 return (row == null) ? LuaValue.NIL : LuaValue.valueOf(row);

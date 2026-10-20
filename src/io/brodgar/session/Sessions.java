@@ -1794,7 +1794,7 @@ public class Sessions {
 	byte[] cookie;
 	List<NamedSocketAddress> hosts;
 	try(AuthClient auth = new AuthClient(server)) {
-	    AuthClient.Credentials creds = new AuthClient.TokenCred(user, token);
+	    AuthClient.TokenCred creds = new AuthClient.TokenCred(user, token);   // its tryauth blocks on no proof of work, so is never interrupted
 	    try {
 		acct = creds.tryauth(auth);
 	    } catch(AuthClient.Credentials.AuthException e) {

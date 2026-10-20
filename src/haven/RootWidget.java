@@ -26,6 +26,7 @@
 
 package haven;
 
+import haven.iosys.tk.*;
 import java.util.*;
 import java.awt.Color;
 
@@ -51,10 +52,11 @@ public class RootWidget extends ConsoleHost implements UI.Notice.Handler, Widget
 	return(false);
     }
 
+    public static final KeyMatch key_prof = KeyMatch.forloc(Key.Loc.Std.TLDE, "`", 0);
     public boolean globtype(GlobKeyEvent ev) {
 	if(ev.propagate(this))
 	    return(true);
-	if(ev.c == '`') {
+	if(key_prof.match(ev)) {
 	    if(UILoop.profile.get()) {
 		add(new Profwnd(guprof, "UI profile"), UI.scale(100, 100));
 		add(new Profwnd(grprof, "GL profile"), UI.scale(500, 100));

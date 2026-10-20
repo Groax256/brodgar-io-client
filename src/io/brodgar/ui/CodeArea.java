@@ -362,7 +362,7 @@ public class CodeArea extends Widget implements Scrollable {
             if(c == 'x')
                 delsel();
         } else if((c == 'v') && (mod == KeyMatch.C)) {
-            ReadLine.PCLine.cliptext(clipboard()).map(this::paste).report(ui, "Clipboard error");
+            ReadLine.PCLine.cliptext(clipboard()).consume(this::paste).report(ui, "Clipboard error");
             return true;
         } else if((c >= 32) && (c != 127) && ((mod == 0) || (mod == (KeyMatch.C | KeyMatch.M)))) {
             // Ctrl+Alt is how AltGr arrives: the characters a keyboard layout puts there are typed text

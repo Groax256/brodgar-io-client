@@ -26,11 +26,11 @@
 
 package haven;
 
+import haven.iosys.tk.*;
 import java.util.*;
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
 public class Widget {
@@ -1318,12 +1318,14 @@ public class Widget {
     public static final KeyMatch key_esc = KeyMatch.forcode(KeyEvent.VK_ESCAPE, 0);
     public static final KeyMatch key_tab = KeyMatch.forcode(KeyEvent.VK_TAB, 0);
     public static abstract class KbdEvent extends Event {
+	protected final Toolkit.KeyEvent tkev;
 	public final KeyEvent awt;
 	public final int code, mods;
 	public final char c;
 
-	public KbdEvent(KeyEvent awt) {
-	    this.awt = awt;
+	public KbdEvent(Toolkit.KeyEvent tkev) {
+	    this.tkev = tkev;
+	    this.awt = AWTCompat.mkawt(tkev);
 	    this.code = awt.getKeyCode();
 	    mods = UI.modflags(awt);
 	    char c = awt.getKeyChar();
@@ -1344,11 +1346,15 @@ public class Widget {
 		c = 0;
 	    this.c = c;
 	}
+
+	public Toolkit.KeyEvent tkev() {
+	    return(tkev);
+	}
     }
 
     public static abstract class FocusedKeyEvent extends KbdEvent {
-	public FocusedKeyEvent(KeyEvent awt) {
-	    super(awt);
+	public FocusedKeyEvent(Toolkit.KeyEvent tkev) {
+	    super(tkev);
 	}
 
 	protected boolean propagation(Widget from) {
@@ -1369,7 +1375,11 @@ public class Widget {
     }
 
     public static class KeyDownEvent extends FocusedKeyEvent {
-	public KeyDownEvent(KeyEvent awt) {super(awt);}
+	public KeyDownEvent(Toolkit.KeyDownEvent tkev) {super(tkev);}
+
+	public Toolkit.KeyDownEvent tkev() {
+	    return((Toolkit.KeyDownEvent)tkev);
+	}
 
 	protected boolean shandle(Widget w) {
 	    if(w.keydown(this))
@@ -1379,7 +1389,11 @@ public class Widget {
     }
 
     public static class KeyUpEvent extends FocusedKeyEvent {
-	public KeyUpEvent(KeyEvent awt) {super(awt);}
+	public KeyUpEvent(Toolkit.KeyUpEvent tkev) {super(tkev);}
+
+	public Toolkit.KeyUpEvent tkev() {
+	    return((Toolkit.KeyUpEvent)tkev);
+	}
 
 	public boolean shandle(Widget w) {
 	    if(w.keyup(this))
@@ -1389,7 +1403,11 @@ public class Widget {
     }
 
     public static class GlobKeyEvent extends KbdEvent {
-	public GlobKeyEvent(KeyEvent awt) {super(awt);}
+	public GlobKeyEvent(Toolkit.KeyDownEvent tkev) {super(tkev);}
+
+	public Toolkit.KeyDownEvent tkev() {
+	    return((Toolkit.KeyDownEvent)tkev);
+	}
 
 	protected boolean propagation(Widget from) {
 	    for(Widget wdg = from.lchild; wdg != null; wdg = wdg.prev) {
@@ -1563,7 +1581,7 @@ public class Widget {
 	     * focus the server asked for on nothing but a Tab. */
 	    if((f != null) && ((f == this) || !f.hasparent(this)))
 		f = null;
-	    if(key_tab.match(ev.awt, KeyMatch.S) && (f != null)) {
+	    if(key_tab.match(ev, KeyMatch.S) && (f != null)) {
 		while(true) {
 		    if((ev.mods & KeyMatch.S) == 0) {
 			Widget n = f.rnext();
@@ -1590,7 +1608,7 @@ public class Widget {
 	KeyMatch gkey = this.gkey;
 	if(kb_gkey != null)
 	    gkey = kb_gkey.key();
-	if((gkey != null) && gkey.match(ev.awt)) {
+	if((gkey != null) && gkey.match(ev)) {
 	    if(gkeytype(ev))
 		return(true);
 	}

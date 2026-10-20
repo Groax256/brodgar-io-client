@@ -92,31 +92,15 @@ public class Client implements Console.Directory {
 	    } else {
 		synchronized(this) {
 		    if(ev instanceof Toolkit.MouseMoveEvent) {
-			mousemv = (Toolkit.MouseMoveEvent)ev;
+			freshmv = (Toolkit.MouseMoveEvent)ev;   // addon: (074.1) the layer is offered it first -- see offer()
 		    } else {
-			pending.add(ev);
+			fresh.add(ev);                          // addon: (074.1) the layer is offered it first -- see offer()
 		    }
 		}
 	    }
 	}
 
-	private static int buttonid(MouseBtn btn) {
-	    if(btn == MouseBtn.Std.LEFT)
-		return(1);
-	    else if(btn == MouseBtn.Std.MIDDLE)
-		return(2);
-	    else if(btn == MouseBtn.Std.RIGHT)
-		return(3);
-	    return(0);
-	}
-
-	/* addon: (074.1) which tree took the press of each mouse button, so that its RELEASE goes to the same
-	 * one. Layer-first is the rule for a press, and it would be wrong for the release that ends a drag: a
-	 * camera pan begun on the world and let go over an addon window must still reach the tree that is
-	 * panning, or the drag never ends. 0 = nobody pressed it, 1 = the layer, 2 = the session. */
-	private final int[] btnowner = new int[4];
-
-	public void dispatch(UI layer, UI ui) {
+	public void dispatch(UI ui) {
 	    List<Toolkit.Event> evs;
 	    Toolkit.MouseMoveEvent mousemv;
 	    synchronized(this) {
@@ -125,76 +109,50 @@ public class Client implements Console.Directory {
 		evs = new ArrayList<>(pending);
 		pending.clear();
 	    }
-	    /* addon: (074.1) A MOVE IS NOT A CLAIM, so both trees get every one of them. It is how a widget
-	     * un-hovers when the pointer leaves it and how each tree learns where the pointer is, and the
-	     * client's own dispatch already broadcasts it to every child rather than stopping at the first. */
 	    if(mousemv != null) {
-		java.awt.event.MouseEvent awt = AWTCompat.mkawt(mousemv);
-		synchronized(layer) {layer.mousemove(awt, mousemv.wndc());}
-		synchronized(ui) {ui.mousemove(awt, mousemv.wndc());}
+		ui.mousemove(mousemv);
 	    }
 	    for(Toolkit.Event ev : evs) {
 		if(ev instanceof Toolkit.MouseDownEvent) {
-		    Toolkit.MouseDownEvent e = (Toolkit.MouseDownEvent)ev;
-		    int btn = buttonid(e.button());
-		    if(btn > 0) {
-			java.awt.event.MouseEvent awt = AWTCompat.mkawt(e);
-			boolean took;
-			synchronized(layer) {took = layer.mousedown(awt, e.wndc(), btn);}
-			if(!took) {
-			    /* addon: (074.1) the press went to the session, so the layer above it gives up
-			     * the focus -- otherwise one click on an addon window keeps Escape and Tab in
-			     * the layer for the rest of the client's life. */
-			    synchronized(layer) {layer.root.clearfocus();}
-			    synchronized(ui) {ui.mousedown(awt, e.wndc(), btn);}
-			}
-			btnowner[btn] = took ? 1 : 2;
-		    }
+		    ui.mousedown((Toolkit.MouseDownEvent)ev);
 		} else if(ev instanceof Toolkit.MouseUpEvent) {
-		    Toolkit.MouseUpEvent e = (Toolkit.MouseUpEvent)ev;
-		    int btn = buttonid(e.button());
-		    if(btn > 0) {
-			java.awt.event.MouseEvent awt = AWTCompat.mkawt(e);
-			int owner = btnowner[btn];
-			btnowner[btn] = 0;
-			boolean took = false;
-			if(owner != 2)
-			    synchronized(layer) {took = layer.mouseup(awt, e.wndc(), btn);}
-			if(!took && (owner != 1))
-			    synchronized(ui) {ui.mouseup(awt, e.wndc(), btn);}
-		    }
+		    ui.mouseup((Toolkit.MouseUpEvent)ev);
 		} else if(ev instanceof Toolkit.MouseWheelEvent) {
-		    Toolkit.MouseWheelEvent e = (Toolkit.MouseWheelEvent)ev;
-		    if(e.axis() == Toolkit.MouseWheelEvent.Axis.VERT) {
-			java.awt.event.MouseEvent awt = AWTCompat.mkawt(e);
-			boolean took;
-			synchronized(layer) {took = layer.mousewheel(awt, e.wndc(), e.amount(), e.subamount());}
-			if(!took)
-			    synchronized(ui) {ui.mousewheel(awt, e.wndc(), e.amount(), e.subamount());}
-		    }
+		    ui.mousewheel((Toolkit.MouseWheelEvent)ev);
 		} else if(ev instanceof Toolkit.KeyDownEvent) {
-		    java.awt.event.KeyEvent awt = AWTCompat.mkawt((Toolkit.KeyEvent)ev);
-		    boolean took;
-		    /* addon: WHICH KEYS ARE DOWN (binding:down()). Both edges of every key pass through
-		     * here and nowhere else, and a hotkey is an edge, so this is the one place the LEVEL
-		     * can be kept. Recorded before the dispatch and for every key, taken or not: a key
-		     * held down is held down whichever tree the press went to. */
-		    io.brodgar.addon.KeyHeld.down(awt);
-		    // addon: (074.1) the layer is offered the FOCUSED key alone -- see UI.keydown(ev, glob)
-		    synchronized(layer) {took = layer.keydown(awt, false);}
-		    if(!took)
-			synchronized(ui) {ui.keydown(awt);}
-		    Debug.keyevent(awt);
+		    ui.keydown((Toolkit.KeyDownEvent)ev);
+		    Debug.keyevent((Toolkit.KeyEvent)ev);
 		} else if(ev instanceof Toolkit.KeyUpEvent) {
-		    java.awt.event.KeyEvent awt = AWTCompat.mkawt((Toolkit.KeyEvent)ev);
-		    boolean took;
-		    io.brodgar.addon.KeyHeld.up(awt);          // addon: the other edge of binding:down()
-		    synchronized(layer) {took = layer.keyup(awt);}
-		    if(!took)
-			synchronized(ui) {ui.keyup(awt);}
-		    Debug.keyevent(awt);
+		    ui.keyup((Toolkit.KeyUpEvent)ev);
+		    Debug.keyevent((Toolkit.KeyEvent)ev);
 		}
 		ui.lastevent = Utils.rtime();
+	    }
+	}
+
+	/* addon: (074.1) TWO TREES TAKE THE INPUT, and the addon layer is offered it first. event() parks what
+	 * comes in here instead of in `pending`; offer() hands it to the layer and moves on into `pending` (and
+	 * `mousemv`) exactly what the session is to get -- so dispatch(ui) above, the client's own, is fed only
+	 * what the layer was offered and did not take. It runs before dispatch(ui) in the same frame, with no
+	 * tree monitor held (UILoop.Frame.tick); LayerInput takes the layer's for each event. */
+	private final List<Toolkit.Event> fresh = new ArrayList<>();
+	private Toolkit.MouseMoveEvent freshmv;
+	private final io.brodgar.addon.LayerInput layerin = new io.brodgar.addon.LayerInput();
+
+	public void offer(UI layer, UI ui) {
+	    List<Toolkit.Event> evs;
+	    Toolkit.MouseMoveEvent mv;
+	    synchronized(this) {
+		mv = freshmv;
+		freshmv = null;
+		evs = new ArrayList<>(fresh);
+		fresh.clear();
+	    }
+	    List<Toolkit.Event> left = layerin.offer(layer, ui, mv, evs);
+	    synchronized(this) {
+		if(mv != null)
+		    mousemv = mv;
+		pending.addAll(left);
 	    }
 	}
     }
@@ -235,20 +193,24 @@ public class Client implements Console.Directory {
 	    return(audiosink);
 	}
 
-	protected void dispatch(UI layer, UI ui) {
+	protected void dispatch(UI ui) {
+	    cl.queue.dispatch(ui);
+	}
+
+	protected void offer(UI layer, UI ui) {
 	    /* addon: a key held while the window loses focus has its RELEASE delivered to whatever took
 	     * the focus, so binding:down() would report it down for ever -- and an addon walking a
 	     * character on a held key would walk it away with nothing left to stop it. Alt-tab lets go. */
 	    if(!wnd.focused())
 		io.brodgar.addon.KeyHeld.clear();
-	    cl.queue.dispatch(layer, ui);
+	    cl.queue.offer(layer, ui);
 	}
 
 	protected boolean bgmode() {
+	    if(wnd.focused())
+		return(false);
 	    Windeye.Visibility v = wnd.visible();
-	    if(v == Windeye.Visibility.UNKNOWN)
-		return(!wnd.focused());
-	    return(v == Windeye.Visibility.NONE);
+	    return((v == Windeye.Visibility.NONE) || (v == Windeye.Visibility.UNKNOWN));
 	}
     }
 
@@ -617,7 +579,7 @@ public class Client implements Console.Directory {
 		final haven.error.ErrorHandler hg = new haven.error.ErrorHandler(new java.net.URI(ed).toURL());
 		hg.sethandler(new haven.error.ErrorGui(null) {
 			public void errorsent() {
-			    hg.interrupt();
+			    System.exit(1);
 			}
 		    });
 		g = hg;

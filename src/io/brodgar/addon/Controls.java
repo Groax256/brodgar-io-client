@@ -330,7 +330,7 @@ final class Controls {
     }
 
     /**
-     * {@code hafen.ui():keybinding()} — the client's own key button ({@link haven.OptWnd.SetButton}), bound to nothing
+     * {@code hafen.ui():keybinding()} — the client's own key button ({@link io.brodgar.ui.SetButton}), bound to nothing
      * until {@code :bind(binding)} joins it to one of the addon's hotkeys (spec 163), at the Keybindings panel's width.
      */
     static LuaValue keybinding(Addon owner, Varargs a) {

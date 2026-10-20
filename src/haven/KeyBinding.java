@@ -31,16 +31,18 @@ import java.util.*;
 
 public class KeyBinding {
     private static final Map<String, KeyBinding> bindings = new HashMap<>();
-    // addon: which binding EXPLICITLY holds a given key+modifiers, by keyid(). Guarded by `bindings`, and the
-    // whole of what makes the exclusivity in set() reversible: a claim is dropped the instant its holder is
-    // re-keyed or unbound, and key() reads it live rather than anything having been written into a loser.
-    private static final Map<Long, KeyBinding> claimed = new HashMap<>();
+    // addon: the bindings that EXPLICITLY hold a key+modifiers, each holding its own `key`, no two the same key
+    // (samekey()). Guarded by `bindings`, and the whole of what makes the exclusivity in set() reversible: a
+    // claim is dropped the instant its holder is re-keyed or unbound, and key() reads it live rather than
+    // anything having been written into a loser. A list, not a map by key: KeyMatch has no hash, and which
+    // binding a pressed key belongs to is the holder's own match() to answer -- a few dozen at the most.
+    private static final List<KeyBinding> claimed = new ArrayList<>();
     public final String id;
     public final KeyMatch defkey;
     public final int modign;
     public KeyMatch key;
     // addon: the exclusivity-aware form of whichever of `key`/`defkey` key() is handing out, and the one it
-    // was built from. Cached because OptWnd.SetButton.follow() (what its draw() runs every frame) compares key() by
+    // was built from. Cached because a key button's draw() (every frame) compares key() by
     // IDENTITY: a fresh wrapper on every call would re-label the button every frame. Guarded by `bindings`, like
     // every other claim state.
     private KeyMatch awarefor, aware;
@@ -56,16 +58,19 @@ public class KeyBinding {
 	// Only an EXPLICIT assignment is ever cleared here. A binding still on its default is never written
 	// to at all: it YIELDS the key for as long as the claim stands (key()) and takes it straight back
 	// when the claim is dropped. Reverting-to-default (null) and disabling (nil) claim nothing.
+	key = raw(key);
 	synchronized(bindings) {
 	    unclaim();
-	    if(claimable(key)) {
-		KeyBinding held = claimed.get(keyid(key));
+	    boolean claim = claimable(key);
+	    if(claim) {
+		KeyBinding held = holder(key);
 		if((held != null) && (held != this))
 		    held.clear();
-		claimed.put(keyid(key), this);
 	    }
 	    Utils.setpref("keybind/" + id, KeyMatch.reduce(key));
 	    this.key = key;
+	    if(claim)
+		claimed.add(this);
 	}
     }
 
@@ -82,13 +87,13 @@ public class KeyBinding {
 	synchronized(bindings) {
 	    if(!claimable(this.key))
 		return;
-	    KeyBinding held = claimed.get(keyid(this.key));
+	    KeyBinding held = holder(this.key);
 	    if(held == this)
 		return;
 	    if(held != null)
 		clear();
 	    else
-		claimed.put(keyid(this.key), this);
+		claimed.add(this);
 	}
     }
 
@@ -112,53 +117,69 @@ public class KeyBinding {
 	}
     }
 
-    // addon: drop this binding's claim on the key it holds, if it is in fact the holder.
+    // addon: drop this binding's claim on the key it holds, if it is in fact the holder -- a binding is in
+    // `claimed` exactly while it holds.
     private void unclaim() {
-	if(claimable(this.key) && (claimed.get(keyid(this.key)) == this))
-	    claimed.remove(keyid(this.key));
+	claimed.remove(this);
+    }
+
+    // addon: the binding that explicitly holds the same key+modifiers as `k`, or null.
+    private static KeyBinding holder(KeyMatch k) {
+	for(KeyBinding h : claimed) {
+	    if(samekey(h.key, k))
+		return(h);
+	}
+	return(null);
     }
 
     // addon: is this a real key, one that can be claimed at all? Null ("use the default") is not, nil
-    // ("unbound") is not, and neither is a match that normalizes to no keycode.
+    // ("unbound") is not, and neither is a char or code match that normalizes to no keycode.
     private static boolean claimable(KeyMatch k) {
-	return((k != null) && (k != KeyMatch.nil) && (keycode(k) != KeyEvent.VK_UNDEFINED));
+	if((k == null) || (k == KeyMatch.nil))
+	    return(false);
+	if((k instanceof KeyMatch.CodeMatch) || (k instanceof KeyMatch.CharMatch))
+	    return(keycode(k) != KeyEvent.VK_UNDEFINED);
+	return(true);
     }
 
-    // addon: the identity of a key+modifiers as one number. Normalizes a char-based match (forchar) and a
-    // code-based one (forcode/forevent) to one keycode, so "Ctrl+G" as a letter and as a VK code are one key.
-    private static long keyid(KeyMatch k) {
-	return(((long)keycode(k) << 8) | (k.modmatch & 0xff));
-    }
-
-    // addon: the same identity for a key as it was actually PRESSED, which is what exclusivity has to be
-    // measured against: a match may IGNORE a modifier the event carries, and so answer to a combo it never
-    // claimed. `modign` is the CALLER's declaration that some modifiers are no part of this key's identity
-    // (Fightsess passes MODS to ask "was this very key released?"), so those bits are dropped here too --
-    // a binding's own modmask is not, since ignoring Shift is exactly the case this exists for. Answers -1
-    // where the event names no key at all, which nothing can claim and nothing should yield to.
-    private static long keyid(KeyEvent ev, int modign) {
-	int code = ev.getExtendedKeyCode();
-	if(code == KeyEvent.VK_UNDEFINED) {
-	    char c = ev.getKeyChar();
-	    if((c == 0) || (c == KeyEvent.CHAR_UNDEFINED))
-		return(-1);
-	    code = KeyEvent.getExtendedKeyCodeForChar(Character.toUpperCase(c));
-	}
-	if(code == KeyEvent.VK_UNDEFINED)
-	    return(-1);
-	return(((long)code << 8) | (UI.modflags(ev) & KeyMatch.MODS & ~modign));
+    // addon: whether two matches name ONE key+modifiers. A char-based match (forchar) and a code-based one
+    // (forcode/forevent) are normalized to one keycode, so "Ctrl+G" as a letter and as a VK code are one key;
+    // every other kind of match is one key with another exactly when KeyMatch says the two are equal.
+    private static boolean samekey(KeyMatch a, KeyMatch b) {
+	int ca = keycode(a), cb = keycode(b);
+	if((ca != KeyEvent.VK_UNDEFINED) || (cb != KeyEvent.VK_UNDEFINED))
+	    return((ca == cb) && (a.modmatch == b.modmatch));
+	return(a.equals(b));
     }
 
     private static int keycode(KeyMatch k) {
-	if(k.code != KeyEvent.VK_UNDEFINED)
-	    return(k.code);
-	if(k.chr != 0)
-	    return(KeyEvent.getExtendedKeyCodeForChar(k.chr));
+	if(k instanceof KeyMatch.CodeMatch)
+	    return(((KeyMatch.CodeMatch)k).code);
+	if((k instanceof KeyMatch.CharMatch) && (((KeyMatch.CharMatch)k).chr != 0))
+	    return(KeyEvent.getExtendedKeyCodeForChar(((KeyMatch.CharMatch)k).chr));
 	return(KeyEvent.VK_UNDEFINED);
     }
 
     public boolean set() {
 	return(key != null);
+    }
+
+    // addon: whether ANOTHER binding than `owner` explicitly holds the key as it was actually PRESSED, which
+    // is what exclusivity has to be measured against: a match may IGNORE a modifier the event carries, and so
+    // answer to a combo it never claimed. The holder's own match() says whether the key is its key, and the
+    // event's modifiers must be the holder's exactly. `modign` is the CALLER's declaration that some modifiers
+    // are no part of this key's identity (Fightsess passes MODS to ask "was this very key released?"), so those
+    // bits are dropped from the event's here too -- a binding's own modmask is not, since ignoring Shift is
+    // exactly the case this exists for.
+    private static boolean heldelsewhere(KeyBinding owner, haven.iosys.tk.Toolkit.KeyEvent ev, int modign) {
+	int mods = KeyMatch.mods(ev) & KeyMatch.MODS & ~modign;
+	synchronized(bindings) {
+	    for(KeyBinding h : claimed) {
+		if((h != owner) && (h.key.modmatch == mods) && h.key.match(ev, modign))
+		    return(true);
+	    }
+	}
+	return(false);
     }
 
     // addon: a binding's key, carrying the exclusivity into the MATCH. key() below yields a default whose
@@ -173,35 +194,87 @@ public class KeyBinding {
     // Shift+B goes to its holder, and dropping the claim -- unbinding or re-keying the holder -- hands
     // Shift+B back to the menu on the very next press. Only ANOTHER binding's claim yields; the holder
     // matches its own key as it always did.
-    private static class Yielding extends KeyMatch {
-	private final KeyBinding owner;
-
-	Yielding(KeyBinding owner, KeyMatch from) {
-	    super(from.chr, from.casematch, from.code, from.extmatch, from.keyname, from.modmask, from.modmatch);
-	    this.owner = owner;
-	}
-
-	public boolean match(KeyEvent ev, int modign) {
-	    if(!super.match(ev, modign))
-		return(false);
-	    long id = keyid(ev, modign);
-	    if(id < 0)
-		return(true);
-	    synchronized(bindings) {
-		KeyBinding held = claimed.get(id);
-		return((held == null) || (held == owner));
-	    }
-	}
+    //
+    // The aware key is the SAME KIND as the key it stands for -- a CharMatch for a CharMatch, a CodeMatch for
+    // a CodeMatch, with the same fields -- because the client reads a binding's key by its kind
+    // (MenuGrid.PagButton.bindchr paints a CharMatch's own char). A kind KeyMatch adds later is stood for by
+    // Yielding, which hands every question but the match to the key itself.
+    private static interface Aware {
+	public KeyMatch from();
     }
 
-    // addon: `k` as a Yielding, one instance per (binding, k). Never wraps null or nil: LuaBinding and
+    // addon: the key an aware key stands for, and any other key as it is.
+    private static KeyMatch raw(KeyMatch k) {
+	return((k instanceof Aware) ? ((Aware)k).from() : k);
+    }
+
+    private static class YieldingChar extends KeyMatch.CharMatch implements Aware {
+	private final KeyBinding owner;
+	private final KeyMatch.CharMatch from;
+
+	YieldingChar(KeyBinding owner, KeyMatch.CharMatch from) {
+	    super(from.chr, from.casematch, from.keyname, from.modmask, from.modmatch);
+	    this.owner = owner;
+	    this.from = from;
+	}
+
+	public boolean match(haven.iosys.tk.Toolkit.KeyEvent ev, int modign) {
+	    return(super.match(ev, modign) && !heldelsewhere(owner, ev, modign));
+	}
+
+	public KeyMatch from() {return(from);}
+    }
+
+    private static class YieldingCode extends KeyMatch.CodeMatch implements Aware {
+	private final KeyBinding owner;
+	private final KeyMatch.CodeMatch from;
+
+	YieldingCode(KeyBinding owner, KeyMatch.CodeMatch from) {
+	    super(from.code, from.extmatch, from.keyname, from.modmask, from.modmatch);
+	    this.owner = owner;
+	    this.from = from;
+	}
+
+	public boolean match(haven.iosys.tk.Toolkit.KeyEvent ev, int modign) {
+	    return(super.match(ev, modign) && !heldelsewhere(owner, ev, modign));
+	}
+
+	public KeyMatch from() {return(from);}
+    }
+
+    private static class Yielding extends KeyMatch implements Aware {
+	private final KeyBinding owner;
+	private final KeyMatch from;
+
+	Yielding(KeyBinding owner, KeyMatch from) {
+	    super(from.keyname, from.modmask, from.modmatch);
+	    this.owner = owner;
+	    this.from = from;
+	}
+
+	public boolean match(haven.iosys.tk.Toolkit.KeyEvent ev, int modign) {
+	    return(from.match(ev, modign) && !heldelsewhere(owner, ev, modign));
+	}
+
+	public String name() {return(from.name());}
+	public String reduce() {return(from.reduce());}
+	public boolean equals(Object o) {return(from.equals(o));}
+	public KeyMatch from() {return(from);}
+    }
+
+    // addon: `k` as an aware key, one instance per (binding, k). Never wraps null or nil: LuaBinding and
     // KeyHeld read "no key" by identity against KeyMatch.nil, and neither can match anything anyway.
     private KeyMatch aware(KeyMatch k) {
 	if(!claimable(k))
 	    return(k);
 	synchronized(bindings) {
 	    if(awarefor != k) {
-		aware = new Yielding(this, k);
+		if(k instanceof KeyMatch.CharMatch)
+		    aware = new YieldingChar(this, (KeyMatch.CharMatch)k);
+		else if(k instanceof KeyMatch.CodeMatch)
+		    aware = new YieldingCode(this, (KeyMatch.CodeMatch)k);
+		else
+		    aware = new Yielding(this, k);
 		awarefor = k;
 	    }
 	    return(aware);
@@ -218,7 +291,7 @@ public class KeyBinding {
 	// is the partial one, where the default goes on matching every combo nothing else has claimed.
 	if(claimable(defkey)) {
 	    synchronized(bindings) {
-		KeyBinding held = claimed.get(keyid(defkey));
+		KeyBinding held = holder(defkey);
 		if((held != null) && (held != this))
 		    return(KeyMatch.nil);
 	    }
@@ -235,8 +308,12 @@ public class KeyBinding {
 		KeyMatch set = KeyMatch.restore(Utils.getpref("keybind/" + id, ""));
 		bindings.put(id, ret = new KeyBinding(id, defkey, modign));
 		ret.key = set;
-		if(claimable(set))   // addon: a stored assignment claims its key as the binding loads
-		    claimed.put(keyid(set), ret);
+		if(claimable(set)) {   // addon: a stored assignment claims its key as the binding loads
+		    KeyBinding held = holder(set);   // addon: the binding loaded last holds a key two were stored under
+		    if(held != null)
+			claimed.remove(held);
+		    claimed.add(ret);
+		}
 	    }
 	    return(ret);
 	}

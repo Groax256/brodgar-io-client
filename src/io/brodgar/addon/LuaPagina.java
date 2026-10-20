@@ -638,8 +638,10 @@ public final class LuaPagina {
             KeyMatch k = b.bind.key();
             if((k == null) || (k.modmatch != 0))
                 return null;
-            char c = k.chr;
-            if((c == 0) && (k.keyname != null) && (k.keyname.length() == 1))
+            char c = 0;
+            if(k instanceof KeyMatch.CharMatch)
+                c = ((KeyMatch.CharMatch)k).chr;
+            else if((k.keyname != null) && (k.keyname.length() == 1))
                 c = k.keyname.charAt(0);
             return (c == 0) ? null : String.valueOf(c);
         } catch(RuntimeException e) {   // Loading etc.

@@ -42,10 +42,8 @@ opens that window: not at compile time, not at start-up. So for a `public` or `p
 What the descriptor rule does not cover, no tool covers: a member kept intact whose *behaviour* changed.
 
 The reshapes of upstream's surface this client carries that no served code in the bundled jars or the
-cache reaches — debt to know about, not bugs: `GameUI.FKeyBelt.beltkeys`; the seven `UI` input entry
-points (`keydown`, `keyup`, `mousedown`, `mouseup`, `mousemove`, `mousehover`, `mousewheel`) returning
-`boolean`; `UILoop.dispatch(UI)` → `dispatch(UI, UI)` and its four subclasses; the `OptWnd` panel
-constructors without their `Panel` argument.
+cache reaches — debt to know about, not bugs: `GameUI.FKeyBelt.beltkeys`; `UI.mousehover(Coord)`
+returning `boolean`; the `OptWnd` panel constructors without their `Panel` argument.
 
 ## See also
 

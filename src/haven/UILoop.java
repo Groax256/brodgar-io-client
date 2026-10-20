@@ -586,9 +586,13 @@ public abstract class UILoop implements Console.Directory {
 	}
     }
 
+    protected abstract void dispatch(UI ui);
+
     /* addon: (074.1) input goes to two trees, and the order is the drawing order upside down: the LAYER is
-     * offered the event first and the session under it sees only what the layer did not consume. */
-    protected abstract void dispatch(UI layer, UI ui);
+     * offered the input first, here, and dispatch(ui) then gives the session under it only what the layer
+     * did not consume. A loop with no window has no input to offer. */
+    protected void offer(UI layer, UI ui) {
+    }
 
     protected AudioSystem.SinkLine audiosink() {
 	return(DummyAudio.DummySink.instance);
@@ -689,10 +693,10 @@ public abstract class UILoop implements Console.Directory {
 	     * to read it (docs/client/multi-session.md's one lock direction). */
 	    UI layer = loop.layer;
 	    Coord sz = loop.wnd.size();
-	    CPUProfile.phase(prof, "dwait");
-	    if(rprofc != null) rprofc.new Part("tick", out);
-	    if(gprof  != null) gprof.part(out, "tick");
-	    loop.dispatch(layer, ui);
+	    /* addon: (074.1) the layer's half of the dispatch, BEFORE the session's and outside its monitor, in the
+	     * session's own phase: the session's half is loop.dispatch(ui) below, which is given what this leaves. */
+	    CPUProfile.phase(prof, "dsp");
+	    loop.offer(layer, ui);
 	    CPUProfile.phase(prof, "ltick");
 	    /* addon: (112.1) THE ADDON LAYER'S STEP, AND NO TREE MONITOR HELD. It is NOT a widget on the layer's
 	     * root: one would run inside the broadcast below with synchronized(layer) already taken -- and an
@@ -718,6 +722,10 @@ public abstract class UILoop implements Console.Directory {
 		}
 	    }
 	    synchronized(ui) {
+		CPUProfile.phase(prof, "dsp");
+		if(rprofc != null) rprofc.new Part("tick", out);
+		if(gprof  != null) gprof.part(out, "tick");
+		loop.dispatch(ui);
 		CPUProfile.phase(prof, "stick");
 		if(ui.sess != null) {
 		    ui.sess.glob.ctick();

@@ -268,7 +268,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	 * something a player could move. */
 	protected String keylabel(int i) {
 	    KeyMatch k = kb_belt[i].key();
-	    if((k == null) || ((k.code == KeyEvent.VK_UNDEFINED) && (k.chr == 0)))
+	    if((k == null) || (k == KeyMatch.nil))
 		return(null);
 	    return(k.name());
 	}

@@ -140,7 +140,12 @@ public final class Prof {
     /** Ring capacity in frames — ~10 s at 60 fps, which is what a frame graph wants to show. */
     public static final int CAP = 600;
 
-    /** The UI-thread phases, in ring order. These are the part names {@code UILoop.Frame} gives {@code uprof}. */
+    /**
+     * The UI-thread phases, in ring order -- the names {@code hafen.prof} publishes. They are the part names
+     * {@code UILoop.Frame} gives {@code uprof}, but one: the client names the input dispatch {@code "dsp"}
+     * and the wait for the render thread {@code "dwait"}, and the published {@code dwait} is the two summed
+     * (see {@link #phaseof}).
+     */
     public static final String[] PHASES = {"dwait", "stick", "utick", "draw", "aux", "wait"};
     /** The render-thread phases, in ring order — the part names {@code UILoop.RenderProfile} gives {@code rprof}. */
     public static final String[] RPHASES = {"tick", "draw", "swap", "finish"};
@@ -284,7 +289,7 @@ public final class Prof {
         List<Profile.Part> sub = uframe.sub();
         for(int i = 0, n = sub.size(); i < n; i++) {
             Profile.Part p = sub.get(i);
-            int k = index(PHASES, p.nm);
+            int k = phaseof(p.nm);
             if((k == P_WAIT) || (k == P_DWAIT))
                 idle += ms(p.d());
         }
@@ -312,9 +317,9 @@ public final class Prof {
         List<Profile.Part> sub = uframe.sub();
         for(int i = 0, n = sub.size(); i < n; i++) {   // indexed: a for-each would allocate an iterator
             Profile.Part p = sub.get(i);
-            int k = index(PHASES, p.nm);
+            int k = phaseof(p.nm);
             if(k >= 0)
-                rph[pb + k] += ms(p.d());   // += : "dwait" is entered twice per frame (tick + syncwait)
+                rph[pb + k] += ms(p.d());   // += : the published dwait is three parts a frame ("dsp" twice, "dwait" once)
         }
 
         int rb = s * NRP;
@@ -410,6 +415,11 @@ public final class Prof {
     /** Seconds to milliseconds, with an unfinished part (t still 0, so d() is negative) clamped to zero. */
     private static double ms(double sec) {
         return (sec > 0) ? (sec * 1e3) : 0;
+    }
+
+    /** The {@link #PHASES} index a {@code uprof} part's name is summed into, -1 for none. */
+    private static int phaseof(Object nm) {
+        return "dsp".equals(nm) ? P_DWAIT : index(PHASES, nm);
     }
 
     private static int index(String[] names, Object nm) {

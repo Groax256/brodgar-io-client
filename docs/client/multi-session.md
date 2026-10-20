@@ -83,8 +83,8 @@ and centring are an addon's hotkeys, listed in `OptWnd.BindingPanel` under the a
 the generic per-addon loop rather than by a hand-written **Multi session** section. An addon hotkey ships
 unbound for the same reason a client one would have to: `KeyBinding.get` runs none of `set`'s exclusivity
 pass, so two *defaults* sharing a key leave both firing, and neither is repairable afterwards
-([services.md](services.md)). A modifier cannot be bound at all — `KeyMatch.Capture.handle` refuses a bare
-`VK_SHIFT`/`VK_CONTROL`/`VK_ALT`, which is what holds the key grab open across a modifier press — so a
+([services.md](services.md)). A modifier cannot be bound at all — `KeyMatch.Capture.handle` refuses a key
+whose primary symbol is one of `Key.Std.MODKEYS`, which is what holds the key grab open across a modifier press — so a
 hold-while-dragging gesture cannot be a binding whoever owns it.
 
 ## One loop, several sessions

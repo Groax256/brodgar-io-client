@@ -103,10 +103,11 @@
   binding with no `addbtn` line is invisible, and keys handled by raw `ev.code`/`ev.c` in a `globtype`
   override (`RootWidget`'s `` ` `` and `:`) are not in the registry at all. The action bar's two rows
   **were** such a case and are not any more — see [widget-input.md](widget-input.md).
-- **The key button a row ends in is not the panel's own** (fork): `OptWnd.SetButton` is a static member of
-  `OptWnd` (upstream nests it in `BindingPanel`), so it can stand in any tree. Its `cmd` is mutable and may be
-  `null` — `set` then writes nothing and Backspace does nothing — and `follow()` shows `cmd.key()` without writing
-  it; `draw` runs it every frame. ⚠️ `SetButton.set(KeyMatch)` is the **write** (`Capture.set`, then `cmd.set`):
+- **The key button a row ends in** is `OptWnd.BindingPanel.SetButton`, an **inner** class of the panel, so it
+  is built only inside an Options window; a key button standing in any other tree is a `KeyMatch.Capture`
+  subclass of its own. Its `cmd` is final; `draw` shows `cmd.key()` every frame, by identity, without writing
+  it, and Backspace (`tkev().sym() == Key.Std.BACKSPACE`) puts the binding back on its default.
+  ⚠️ `SetButton.set(KeyMatch)` is the **write** (`Capture.set`, then `cmd.set`):
   called to display a key, it makes a binding on its default an assignment. `KeyMatch.Capture.click` toggles the key
   grab — open, the caption reads `...`; a second click closes it and restores the caption — and `keydown` closes it
   only when `handle` answers `true`, which a bare modifier never does.

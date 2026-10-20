@@ -14,7 +14,7 @@
 | **Draw root** | `UI.draw` → `root.draw(g)` (direct — **not** through a dispatch), then `afterdraws` |
 | **Draw recursion point (the ONE seam)** | `Widget.draw(GOut,boolean)` child loop — `xlate`+`reclip(l)`, `CPUProfile.begin(wdg)`, `Fonts.frame(wdg)`, `wdg.draw(g2)` |
 | `gtick` (render hand-off) | `UI.gtick` → `GTickEvent` — a **separate** pass, inside the same `utick` phase |
-| Frame phases around them | `UILoop.Frame.tick` (`dwait`/`stick`/`utick`), `display` (`draw`) |
+| Frame phases around them | `UILoop.Frame.tick` (`dsp`/`stick`/`utick`), `display` (`draw`) |
 | Per-widget cost probe (fork) | `// addon:` `Widget.prof` + `profadd` (`Widget`), the two seams above, and the root bracket in `UI.draw` |
 | Per-widget decoration seam (fork) | `// addon:` `Widget.addonovs` (null on a widget carrying none) + the call in the child loop placed **after** `wdg.draw(g2)` and **outside** `Fonts.frame(wdg)`, with the root's twin in `UI.draw` after `root.draw(g)`. The `g2` it is handed is already translated and clipped to that child's box |
 

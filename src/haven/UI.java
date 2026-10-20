@@ -882,58 +882,53 @@ public class UI {
 	msg(new InfoMessage(msg));
     }
 
-    private void setmods(InputEvent ev) {
-	int mod = ev.getModifiersEx();
-	modshift = (mod & InputEvent.SHIFT_DOWN_MASK) != 0;
-	modctrl = (mod & InputEvent.CTRL_DOWN_MASK) != 0;
-	modmeta = (mod & (InputEvent.META_DOWN_MASK | InputEvent.ALT_DOWN_MASK)) != 0;
-	/*
-	modsuper = (mod & InputEvent.SUPER_DOWN_MASK) != 0;
-	*/
+    private void setmods(Set<Key.Mod> mods) {
+	modshift = mods.contains(Key.Mod.SHIFT);
+	modctrl = mods.contains(Key.Mod.CONTROL);
+	modmeta = mods.contains(Key.Mod.ALT) || mods.contains(Key.Mod.META);
+	modsuper = mods.contains(Key.Mod.SUPER);
     }
 
     private Grab[] c(Collection<Grab> g) {return(g.toArray(new Grab[0]));}
 
-    /* addon: (074.1) EVERY INPUT ENTRY ANSWERS WHETHER THE TREE TOOK THE EVENT. The frame attends two trees
-     * now -- the session on screen and the addon layer above it -- and "the layer first, the session only if
-     * the layer did not consume it" is a question none of these could answer while they returned void. The
-     * dispatch each one does is unchanged; what is new is that its answer leaves the method. */
-    public boolean keydown(KeyEvent ev) {
-	return(keydown(ev, true));
-    }
-
-    /* addon: (074.1) the FOCUSED half of a key press, without the global fallback -- what the addon layer is
-     * offered, and all it is offered. RootWidget answers a GlobKeyEvent for every printable key with a "gk"
-     * message and consumes it, so a layer handed the whole of keydown() would swallow the keyboard from the
-     * session under it. A global key belongs to the game; a focused one belongs to whatever holds focus. */
-    public boolean keydown(KeyEvent ev, boolean glob) {
-	setmods(ev);
-	if(dispatch(root, new KeyDownEvent(ev)))
-	    return(true);
-	return(glob && dispatch(root, new GlobKeyEvent(ev)));
-    }
-
-    public boolean keyup(KeyEvent ev) {
-	setmods(ev);
-	return(dispatch(root, new KeyUpEvent(ev)));
-    }
-
-    public boolean mousedown(MouseEvent ev, Coord c, int button) {
-	setmods(ev);
-	lcc = mc = c;
-	return(dispatch(root, new Widget.MouseDownEvent(c, button)));
+    public void keydown(Toolkit.KeyDownEvent ev) {
+	setmods(ev.mods());
+	if(!dispatch(root, new KeyDownEvent(ev)))
+	    dispatch(root, new GlobKeyEvent(ev));
     }
 	
-    public boolean mouseup(MouseEvent ev, Coord c, int button) {
-	setmods(ev);
-	mc = c;
-	return(dispatch(root, new Widget.MouseUpEvent(c, button)));
+    public void keyup(Toolkit.KeyUpEvent ev) {
+	setmods(ev.mods());
+	dispatch(root, new KeyUpEvent(ev));
+    }
+
+    private static int buttonid(MouseBtn btn) {
+	if(btn == MouseBtn.Std.LEFT)
+	    return(1);
+	else if(btn == MouseBtn.Std.MIDDLE)
+	    return(2);
+	else if(btn == MouseBtn.Std.RIGHT)
+	    return(3);
+	return(0);
+    }
+
+    public void mousedown(Toolkit.MouseDownEvent ev) {
+	setmods(ev.mods());
+	int button = buttonid(ev.button());
+	if(button > 0)
+	    dispatch(root, new Widget.MouseDownEvent(lcc = mc = ev.wndc(), button));
     }
 	
-    public boolean mousemove(MouseEvent ev, Coord c) {
-	setmods(ev);
-	mc = c;
-	return(dispatch(root, new Widget.MouseMoveEvent(c)));
+    public void mouseup(Toolkit.MouseUpEvent ev) {
+	setmods(ev.mods());
+	int button = buttonid(ev.button());
+	if(button > 0)
+	    dispatch(root, new Widget.MouseUpEvent(mc = ev.wndc(), button));
+    }
+	
+    public void mousemove(Toolkit.MouseMoveEvent ev) {
+	setmods(ev.mods());
+	dispatch(root, new Widget.MouseMoveEvent(mc = ev.wndc()));
     }
 
     public boolean mousehover(Coord c) {
@@ -954,10 +949,10 @@ public class UI {
 	return(dispatch(root, new Widget.MouseHoverEvent(c).hovering(hovering && !std)) || std);
     }
 	
-    public boolean mousewheel(MouseEvent ev, Coord c, int ia, double sa) {
-	setmods(ev);
-	mc = c;
-	return(dispatch(root, new Widget.MouseWheelEvent(c, ia, sa)));
+    public void mousewheel(Toolkit.MouseWheelEvent ev) {
+	setmods(ev.mods());
+	if(ev.axis() == Toolkit.MouseWheelEvent.Axis.VERT)
+	    dispatch(root, new Widget.MouseWheelEvent(mc = ev.wndc(), ev.amount(), ev.subamount()));
     }
 
     public static enum Cursor {
@@ -1010,6 +1005,14 @@ public class UI {
      * is (io.brodgar.addon.AddonText), read by UILoop.drawtooltip right after the query it follows. */
     public Widget tipfrom() {
 	return(prevtt);
+    }
+
+    public static int modflags(Set<Key.Mod> mods) {
+	return((mods.contains(Key.Mod.SHIFT)   ? MOD_SHIFT : 0) |
+	       (mods.contains(Key.Mod.CONTROL) ? MOD_CTRL  : 0) |
+	       (mods.contains(Key.Mod.META)    ? MOD_META  : 0) |
+	       (mods.contains(Key.Mod.ALT)     ? MOD_META  : 0) |
+	       (mods.contains(Key.Mod.SUPER)   ? MOD_SUPER : 0));
     }
 
     public static int modflags(InputEvent ev) {
