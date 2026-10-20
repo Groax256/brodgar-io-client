@@ -881,7 +881,7 @@ public class WGLContext implements Providers.Factory<Toolkit> {
 		    return(0);
 		}
 		case Win32.WM_MOUSEWHEEL: {
-		    int raw = (short)((wparam & 0xffff0000) >> 16);
+		    int raw = -(short)((wparam & 0xffff0000) >> 16);   // addon: Win32 counts a roll away from the user positive; the client's MouseWheelEvent counts it negative, as AWT and GLX do
 		    vwheelacc += raw;
 		    int amount = vwheelacc / 120;
 		    vwheelacc -= amount * 120;
