@@ -1,0 +1,9 @@
+{
+  "name": "176.2 — GobOverlaySdtChanged",
+  "id": "176-overlay-sdt.2",
+  "version": "1.0.1",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 176.2: near misses are refused naming both state-byte keys, GobOverlaySdtChanged subscribes and, while mining, every firing carries a string key, a live gob and non-empty 0..255 members, with a gfx/fx/cavewarn firing among them.",
+  "api_version": "1.0",
+  "files": ["main.lua"]
+}

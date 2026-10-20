@@ -142,6 +142,7 @@ end
 | `nil` | An overlay of yours, a thing you stood at the gob (neither carries any), or the overlay or its gob is gone. |
 | A fresh table every read | Two reads are never the same table, and writing into one changes nothing. |
 | An ended overlay | One the server has ended can stay listed, bytes and all, while its effect plays out on screen. |
+| Hearing it change | [`GobOverlaySdtChanged`](event/bus/world.md#an-overlays-state-changing) fires with each new value. |
 
 ---
 

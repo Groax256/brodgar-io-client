@@ -22,6 +22,7 @@ end)
 | `GobOverlayAdded` | `event`: `:gob()` `:key()` `:native()` | Something is attached to a game object ([`gob:overlay()`](../../overlay.md)). |
 | `GobOverlayRemoved` | `event`: `:gob()` `:key()` `:native()` | Something attached to a game object goes away. |
 | `GobSdtChanged` | `event`: `:gob()` `:sdt()` | The state bytes on a resource-drawn object change ([`gob:sdt()`](../../gob.md#state)). |
+| `GobOverlaySdtChanged` | `event`: `:gob()` `:key()` `:sdt()` | The state bytes of the game's overlays under one key change ([`overlay:sdt()`](../../overlay.md#the-games-state-bytes)). |
 
 | Rule | Detail |
 |---|---|
@@ -36,7 +37,7 @@ end)
 | Rule | Detail |
 |---|---|
 | The hold changes no data | What answers inside the handler is what answers a step later: [`gob:name()`](../../gob.md), [`gob:sdt()`](../../gob.md#state), [`gob:hitbox()`](../../gob.md) for a resource-drawn object. What has not resolved answers `nil`. A composed object (a character or an animal carrying equipment) answers `nil` a moment longer and the client does not wait for it. Ask again from a [timer](../../timer.md). |
-| Only while somebody is listening | Until an addon subscribes to `GobAdded` nothing is held. The cost begins with the first subscription and ends at the next `:reload`, not at `subscription:off()`. The seam stays armed. A hold with nobody to hand the object to is released by the next frame. [`GobOverlayAdded`](#overlays-coming-and-going) and [`GobSdtChanged`](#the-state-changing) arm seams of their own. |
+| Only while somebody is listening | Until an addon subscribes to `GobAdded` nothing is held. The cost begins with the first subscription and ends at the next `:reload`, not at `subscription:off()`. The seam stays armed. A hold with nobody to hand the object to is released by the next frame. [`GobOverlayAdded`](#overlays-coming-and-going), [`GobSdtChanged`](#the-state-changing) and [`GobOverlaySdtChanged`](#an-overlays-state-changing) arm seams of their own. |
 | Drawn anyway after a second | A handler that takes longer, or an addon disabled mid-flight, costs a late frame and never a missing object. |
 | Only objects the game sends | A [thing of your own](../../virtual/README.md) (a ghost, a sprite, a model, a standing widget, a patch) fires no `GobAdded`. It is drawn the moment you place it. |
 | `GobRemoved` holds nothing | It reports an object that has already left. |
@@ -62,7 +63,7 @@ end)
 | Yours are private, the game's are public | A `native = false` event goes only to the addon that attached it. Native events broadcast, since a resource name means the same to everyone. |
 | Next frame | Not inside the `:add` itself: the game's overlays arrive on loader threads, and both halves use one moment. A handler runs on the [step](../../threading.md) and reads the truth: already there on an add, already gone on a removal. |
 | Re-attaching under the same key | Fires both, the removal then the add. |
-| Counted by key | Several game overlays may share one resource and collapse to one key, so a second of that resource arriving is not an add. [`overlay:count()`](../../overlay.md) has the multiplicity. |
+| Counted by key | Several game overlays may share one resource and collapse to one key, so a second of that resource arriving is not an add. [`overlay:count()`](../../overlay.md) has the multiplicity, and [`GobOverlaySdtChanged`](#an-overlays-state-changing) fires when it moves. |
 | When a gob leaves | Yours on it are reported gone before its `GobRemoved`. The game's are not: the client drops a departing gob whole, and a native removal is reported only while the gob is there. A `:reload` fires neither. |
 
 ### The state changing
@@ -86,6 +87,35 @@ end)
 | Next frame | Like the overlay events, and after the `GobAdded` that introduced the object when both land in one frame. |
 | `event:sdt()` is that firing's own bytes | Never a fresh `gob:sdt()` read: two changes in one frame would otherwise both answer the last one. |
 | Never owner-scoped | The state belongs to the server's object. Every subscriber is told alike. |
+
+### An overlay's state changing
+
+`GobOverlaySdtChanged` fires when what [`overlay:sdt()`](../../overlay.md#the-games-state-bytes) answers for one of the game's overlays changes while its key is on the gob: a second overlay of one resource arriving, one of two leaving, a member's bytes rewritten. A cave-in warning's dust settling on a gob that already carries some is heard here and nowhere else.
+
+| `event` | Returns | Permission | Description |
+|---|---|---|---|
+| `event:gob()` | [Gob](../../gob.md) | Unprotected | The gob the overlays hang on. |
+| `event:key()` | `string` | Unprotected | The overlays' resource name, the key [`gob:overlay()`](../../overlay.md) reads them under. |
+| `event:sdt()` | `number[][]` | Unprotected | The new value, the shape `overlay:sdt()` answers: one array of `0..255` numbers per member, in arrival order. |
+
+```lua
+hafen.event():on("GobOverlaySdtChanged", function(event)
+  local members = event:sdt()
+  local newest = members[#members]
+  hafen.log():write(("%s on %d: %d member(s), newest first byte %s")
+    :format(event:key(), event:gob():id(), #members, tostring(newest[1])))
+end)
+```
+
+| Rule | Detail |
+|---|---|
+| Once per object | The rule of `GobSdtChanged`, one level down: five characters watching one dust burst produce one event. |
+| Next frame | Like the overlay events, and after the `GobOverlayAdded` that introduced the key when both land in one frame. |
+| Fires for the first value | A key's first value fires too, so a handler hears every overlay it can read bytes from. Never on the last member leaving: that moment is `GobOverlayRemoved`. |
+| `event:sdt()` is that firing's own value | Never a fresh `overlay:sdt()` read: two changes in one frame would otherwise both answer the last one. |
+| A rewritten member can pass through two moments | Its new copy can arrive before the old one leaves, so the event fires once holding both and once holding the new one alone. That is what `overlay:count()` answers at each moment. |
+| Native only | Your own overlays carry no state bytes and never fire it. |
+| Never owner-scoped | A resource name means the same to every addon. Every subscriber is told alike. |
 
 ## World ghosts and sprites
 
@@ -115,6 +145,6 @@ end)
 
 - [The catalogue](README.md) — the other families, and whose character an event was.
 - [The Gob object](../../gob.md) — what the payload of `GobAdded` and `GobRemoved` answers.
-- [`gob:overlay()`](../../overlay.md) — the collection the two overlay events report on.
+- [`gob:overlay()`](../../overlay.md) — the collection the overlay events report on.
 - [The world entities](../../virtual/README.md) — the ghosts, sprites, models and patches a click lands on.
 - [`session:world()`](../../world.md) — reading the world on demand instead of listening to it.

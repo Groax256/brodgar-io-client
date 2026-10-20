@@ -26,7 +26,7 @@
       `overlay:sdt` and `no arguments`.
       `[manual]`: none.
 
-- [ ] **176.2 — GobOverlaySdtChanged.**
+- [x] **176.2 — GobOverlaySdtChanged.**
       - **Code.** The event as `plan.md` *The event* writes it: `overlaySdtSubs`;
         `SessionState.overlaySdtEvents` and `OverlaySdtEvent`; the capture in `nativeOverlayEvent`
         ahead of the union gate; `gobOverlaySdtChanged(Gob, Gob.Overlay)` and its one tagged line in

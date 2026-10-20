@@ -26,7 +26,7 @@ Most events are one character's (meters, buffs, food, study slots, equipment, ac
 
 | Events without a session | Why |
 |---|---|
-| `GobAdded`, `GobRemoved`, `GobOverlayAdded`, `GobOverlayRemoved`, `GobSdtChanged` | A game object is the world's, and each fires once for it ([the world](world.md)). |
+| `GobAdded`, `GobRemoved`, `GobOverlayAdded`, `GobOverlayRemoved`, `GobSdtChanged`, `GobOverlaySdtChanged` | A game object is the world's, and each fires once for it ([the world](world.md)). |
 | `SessionAdded`, `SessionEnteredWorld`, `SessionSelected`, `SessionRemoved` | The session is the payload. |
 | `Load`, `Update`, `Disable` | Your addon's own. One of it however many characters are up. |
 | `MarkerChanged` | The recorded map is one database for the client. |

@@ -130,6 +130,13 @@ public final class LuaEvent {
          */
         SDT("sdt", "a state-change event"),
         /**
+         * {@code hafen.event():on("GobOverlaySdtChanged", fn)} — 176.2's payload: three things to say,
+         * {@code :gob()} the object, {@code :key()} the native overlay's resource name and {@code :sdt()} the
+         * value {@code overlay:sdt()} answered at THIS firing's moment (one array per member) — never a live
+         * re-read. No {@code :native()}: the event is about the game's overlays only.
+         */
+        OVERLAYSDT("overlaysdt", "an overlay state-change event"),
+        /**
          * {@code hafen.event():on("GhostClicked"/"SpriteClicked"/"ObjectClicked"/"PatchClicked", fn)} — the V2 click payload,
          * objectified (041.7): all four answer the same shape, and only the noun matching {@code clickKey()}
          * (the emitter that actually fired) reads non-nil — the other three read {@code nil} rather than throwing,
@@ -267,6 +274,34 @@ public final class LuaEvent {
         this.gobId = gobId;
         this.key = null;
         this.nat = false;
+        this.wx = 0;
+        this.wy = 0;
+    }
+
+    /** OVERLAYSDT shape (176.2): {@code hafen.event():on("GobOverlaySdtChanged", fn)}'s payload — {@code gobId}
+     *  the object, {@code key} the native overlay's resource name, {@code value} the already-converted
+     *  array of arrays ({@link AddonManager#fireGobOverlaySdt}, one fresh table per owner), in {@code extra}
+     *  like {@code SDT}'s bytes. */
+    private LuaEvent(Addon owner, Shape shape, long gobId, String key, LuaValue value) {
+        this.owner = owner;
+        this.shape = shape;
+        this.cancel = null;
+        this.msg = null;
+        this.wdg = null;
+        this.args = null;
+        this.ui = null;
+        this.rewritten = null;
+        this.x = 0;
+        this.y = 0;
+        this.button = null;
+        this.amount = null;
+        this.g = null;
+        this.extra = value;
+        this.flag = false;
+        this.mods = 0;
+        this.gobId = gobId;
+        this.key = key;
+        this.nat = true;
         this.wx = 0;
         this.wy = 0;
     }
@@ -511,6 +546,14 @@ public final class LuaEvent {
     }
 
     /**
+     * The {@code ev} for one {@code GobOverlaySdtChanged} fire (176.2) — minted per owner (D-045), {@code value}
+     * already converted for that owner alone ({@link AddonManager#fireGobOverlaySdt}).
+     */
+    static LuaValue overlaySdt(Addon owner, long gobId, String key, LuaValue value) {
+        return of(new LuaEvent(owner, Shape.OVERLAYSDT, gobId, key, value));
+    }
+
+    /**
      * The {@code ev} for one {@code GhostClicked}/{@code SpriteClicked}/{@code ObjectClicked}/{@code PatchClicked} fire (V2 click
      * dispatch, objectified 041.7) — {@code entity} is the already-interned ghost/sprite/object handle,
      * {@code clickKey} which noun answers it ({@link LuaWorldEntity#clickKey()}).
@@ -594,12 +637,17 @@ public final class LuaEvent {
         return "a " + o.getClass().getSimpleName();
     }
 
-    /** {@code ev:gob()} (OVERLAY) — the interned Gob handle, minted on the first ask (like {@code :widget()}). */
+    /** {@code ev:gob()} (OVERLAY, SDT, OVERLAYSDT) — the interned Gob handle, minted on the first ask (like
+     *  {@code :widget()}). */
     private LuaValue gob() {
-        if(gobObj == null)
+        if(gobObj == null) {
             // The object, read through the login this event is about (audit2 B05) -- the same handle
-            // s:world():gob():get(id) hands back on that session.
-            gobObj = LuaGob.of(owner, AddonManager.userOf(ui), gobId);
+            // s:world():gob():get(id) hands back on that session. A world event carries no tree (ui is null:
+            // the object is the client's, not one session's), so it is read through a session that holds the
+            // object, as GobAdded's is. A null login resolves to nothing, which is a dead handle on a live gob.
+            String user = (ui != null) ? AddonManager.userOf(ui) : AddonManager.gobUser(gobId);
+            gobObj = LuaGob.of(owner, user, gobId);
+        }
         return gobObj;
     }
 
@@ -642,6 +690,8 @@ public final class LuaEvent {
             overlay(m);
         } else if(shape == Shape.SDT) {
             sdt(m);
+        } else if(shape == Shape.OVERLAYSDT) {
+            overlaySdt(m);
         } else if(shape == Shape.CLICKED) {
             clicked(m);
         } else {
@@ -1050,6 +1100,28 @@ public final class LuaEvent {
         m.set("sdt", new VarArgFunction() {
             public Varargs invoke(Varargs a) {
                 return self(a.arg1(), Shape.SDT, "sdt").extra;
+            }
+        });
+    }
+
+    /**
+     * {@code hafen.event():on("GobOverlaySdtChanged", fn)} (176.2): {@code :gob()} the owner's own interned
+     * handle, {@code :key()} the resource name, {@code :sdt()} this firing's own array of arrays. Uncancelable.
+     */
+    private static void overlaySdt(LuaTable m) {
+        m.set("gob", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                return self(a.arg1(), Shape.OVERLAYSDT, "gob").gob();
+            }
+        });
+        m.set("key", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                return LuaValue.valueOf(self(a.arg1(), Shape.OVERLAYSDT, "key").key);
+            }
+        });
+        m.set("sdt", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                return self(a.arg1(), Shape.OVERLAYSDT, "sdt").extra;
             }
         });
     }

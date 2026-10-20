@@ -349,6 +349,7 @@ public class OCache implements Iterable<Gob> {
 		    } else if((os != null) && (ol.spr instanceof Sprite.CUpd)) {
 			((Sprite.CUpd)ol.spr).update(new MessageBuf(sdt));
 			os.sdt = sdt;
+			io.brodgar.addon.AddonManager.gobOverlaySdtChanged(g, ol);   // addon: 176.2 GobOverlaySdtChanged (a member's bytes rewritten in place)
 		    } else {
 			nol = new Gob.Overlay(g, olid, new OlSprite(res, sdt));
 			nol.old = msg.old;

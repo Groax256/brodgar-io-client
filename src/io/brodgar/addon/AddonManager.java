@@ -172,6 +172,10 @@ public final class AddonManager {
     // every gob that carries state bytes (most resource-drawn objects, whether or not they ever change),
     // so it must cost one volatile read when nobody listens. Set by a subscription, cleared per reload.
     static volatile boolean sdtSubs;
+    // 176.2: the same fast path, for the state bytes of the game's overlays -- the nativeOverlayEvent capture
+    // and the OCache.$overlay CUpd seam. A GobOverlaySdtChanged subscription also arms `overlaySubs` (its key
+    // starts with "GobOverlay"), which is what lets nativeOverlayEvent reach the capture at all.
+    static volatile boolean overlaySdtSubs;
     // 114.1: the same fast path, for the render gate in Gob.added -- it sits on every entry into a render
     // tree, so an object arriving must cost one volatile read when nobody is listening for GobAdded. Set by
     // a subscription, cleared per reload. A stale `true` (the last subscriber went away) costs a hold that
@@ -510,6 +514,8 @@ public final class AddonManager {
         final Queue<OverlayEvent> overlayEvents = new ConcurrentLinkedQueue<OverlayEvent>();
         /** 113.3: the same marshalling for a gob's state-byte change ({@code ResDrawable.$cres.apply}'s seam). */
         final Queue<SdtEvent> sdtEvents = new ConcurrentLinkedQueue<SdtEvent>();
+        /** 176.2: the same marshalling for the state bytes of the game's overlays on a gob, per key. */
+        final Queue<OverlaySdtEvent> overlaySdtEvents = new ConcurrentLinkedQueue<OverlaySdtEvent>();
         // 112.3: the widget-ENTRY seam — Widget.add0 runs under synchronized(w.ui) on whatever thread placed
         // the widget (a Loader thread applying a server update, the UI thread for a client-side add), so the
         // tap only enqueues; the LAYER's step drains it (drainEnteredWidgets), holding no tree monitor, which
@@ -1318,11 +1324,14 @@ public final class AddonManager {
             //    frame's Update/timers belonged to the addons we just tore down).
             if(st.reloadPending) {
                 st.reloadPending = false;
-                for(SessionState ss : allStates())
+                for(SessionState ss : allStates()) {
                     ss.overlayEvents.clear();   // 038.3: the addons that queued these are being torn down
+                    ss.overlaySdtEvents.clear();   // 176.2: ...and these
+                }
                 sessionEvents.clear();          // 074.3: ...and so are the ones these were queued for
                 overlaySubs = false;            //   (the reloaded ones re-subscribe inside reload())
                 sdtSubs = false;                // 113.3: same reset, same reason
+                overlaySdtSubs = false;         // 176.2: same reset...
                 gobAddedSubs = false;           // 114.1: same reset...
                 releaseAllHolds();              //   ...and nothing is left that could announce what is held
                 AddonRegistry.reload();
@@ -1563,6 +1572,10 @@ public final class AddonManager {
             //     before the gob's own GobRemoved, so an overlay is never reported dying after the thing it
             //     was on.
             drainOverlayEvents(st);
+
+            // 1'a. The state bytes of the game's overlays changed (176.2): right after 1', so a key's
+            //      GobOverlayAdded is always reported before its first value.
+            drainOverlaySdtEvents(st);
 
             // 1''. A gob's state bytes changed (113.3), captured on the loader threads inside
             //      ResDrawable.$cres.apply's own gob-monitor seam. Same reasoning as 1': drained on the
@@ -2518,7 +2531,7 @@ public final class AddonManager {
     static final String[] BUS_KEYS = {
         "Load", "Update", "Disable",
         "SessionAdded", "SessionEnteredWorld", "SessionSelected", "SessionRemoved",
-        "GobAdded", "GobRemoved", "GobOverlayAdded", "GobOverlayRemoved", "GobSdtChanged",
+        "GobAdded", "GobRemoved", "GobOverlayAdded", "GobOverlayRemoved", "GobSdtChanged", "GobOverlaySdtChanged",
         "MeterAdded", "MeterRemoved", "MeterChanged",
         "BuffAdded", "BuffRemoved", "BuffChanged",
         "OpeningAdded", "OpeningRemoved", "OpeningChanged",
@@ -2554,7 +2567,8 @@ public final class AddonManager {
             hint = " — the session family is SessionAdded, SessionEnteredWorld, SessionSelected and"
                 + " SessionRemoved";
         else if(key.toLowerCase().contains("sdt"))
-            hint = " — the key is GobSdtChanged";
+            hint = " — the keys are GobSdtChanged (an object's state bytes) and GobOverlaySdtChanged"
+                + " (the state bytes of the game's overlays on it)";
         else if(key.toLowerCase().startsWith("opponent"))
             hint = " — the fight's opponent keys are OpponentAdded, OpponentRemoved, OpponentChanged and"
                 + " OpponentSelected";
@@ -3143,12 +3157,122 @@ public final class AddonManager {
             String key = LuaGobOverlay.nativeKey(ol);
             if(key == null)
                 return;                 // its sprite has not resolved: no name to be addressed by, so not there yet
+            if(overlaySdtSubs)          // 176.2: ahead of the union gate, so a second member arriving is captured
+                queueOverlaySdtEvent(g, key);
             if(LuaGobOverlay.countNative(g, key) != (added ? 1 : 0))
                 return;                 // the union still has (or already had) another of this resource
             queueOverlayEvent(g, new OverlayEvent(added, g.id, key, true, null));
         } catch(RuntimeException e) {
             /* the engine's overlay path is not ours to break */
         }
+    }
+
+    /**
+     * <b>One of the game's overlays had its state bytes rewritten in place</b> (176.2) — the {@code // addon:}
+     * line in {@code OCache.$overlay}'s {@code Sprite.CUpd} branch, after {@code os.sdt = sdt}: the one place a
+     * member's bytes change without an add or a removal (both of which reach {@link #nativeOverlayEvent}).
+     * Called under {@code OCache.ObjDelta.apply}'s {@code synchronized(gob)}, which {@link LuaGobOverlay#nativeSdt}
+     * re-enters; like {@link #gobOverlayCame} it never calls Lua and never throws back into the engine.
+     */
+    public static void gobOverlaySdtChanged(Gob g, Gob.Overlay ol) {
+        if(!overlaySdtSubs || (g == null) || (ol == null))
+            return;
+        try {
+            String key = LuaGobOverlay.nativeKey(ol);
+            if(key != null)
+                queueOverlaySdtEvent(g, key);
+        } catch(RuntimeException e) {
+            /* the engine's overlay path is not ours to break */
+        }
+    }
+
+    /** Take the value {@code overlay:sdt()} answers for {@code key} on {@code g} NOW, and file it under the
+     *  session the gob is in — see {@link #queueOverlayEvent}. The value is the seam's own, never re-read at
+     *  the drain, for the reason {@link SdtEvent} carries its bytes.
+     *
+     *  <p>Never for one of the client's own gobs (an {@code OCache.Virtual}, carrying a one-shot effect such as a
+     *  footstep's sound). Its id is not the server's but a per-cache counter from -1 down, so the same id names a
+     *  different throwaway gob in every session, and {@code Gob.ctick} drops it the tick its effect ends: it is no
+     *  world object, and the once-per-object gate cannot key on it. The test is the CLASS, never
+     *  {@code Gob.virtual}: the server flags objects of its own virtual too, under their real ids, and the cave-in
+     *  warning's dust hangs on one of those. */
+    private static void queueOverlaySdtEvent(Gob g, String key) {
+        if(g instanceof OCache.Virtual)
+            return;
+        SessionState st = queueState(io.brodgar.session.Sessions.uifor(g.glob));
+        if(st != null)
+            st.overlaySdtEvents.add(new OverlaySdtEvent(g.id, key, LuaGobOverlay.nativeSdt(g, key)));
+    }
+
+    /**
+     * Deliver the overlay state-byte events captured since the last tick, bounded by the queue's size at entry
+     * (see {@link #drainOverlayEvents}). {@link #overlaySdtEdge} settles two sessions' reports of one change into
+     * one firing, as {@link #sdtEdge} does one level up.
+     *
+     * <p><b>Only for a gob some session holds</b> — the question {@link #nativeEdge} asks through
+     * {@link #nativeHeld}: a gob that left between the capture and this drain has had {@link #gobLeft} drop its
+     * record, which a stale event must not put back. The client's own gobs never reach the queue
+     * ({@link #queueOverlaySdtEvent}).
+     */
+    private static void drainOverlaySdtEvents(SessionState st) {
+        for(int n = st.overlaySdtEvents.size(); n > 0; n--) {
+            OverlaySdtEvent oe = st.overlaySdtEvents.poll();
+            if(oe == null)
+                break;
+            if(gobHeld(oe.gobId) && overlaySdtEdge(oe.gobId, oe.key, oe.sdt))
+                fireGobOverlaySdt(oe.gobId, oe.key, oe.sdt);
+        }
+    }
+
+    /** The value last REPORTED for each native key on a gob, keyed by gob id then key — {@link #lastSdt}'s
+     *  shape one level down. Dropped whole with the gob in {@link #gobLeft}. */
+    private static final Map<Long, Map<String, List<byte[]>>> lastOverlaySdt = new HashMap<Long, Map<String, List<byte[]>>>();
+
+    /**
+     * <b>Is {@code l} a real change from what was last reported for {@code key} on {@code gobId}?</b> An empty
+     * list is the key's last member leaving: it forgets the key and fires nothing, since that moment is
+     * {@code GobOverlayRemoved}'s. Otherwise true and recorded exactly when {@code l} differs member by member.
+     */
+    private static boolean overlaySdtEdge(long gobId, String key, List<byte[]> l) {
+        Long id = Long.valueOf(gobId);
+        Map<String, List<byte[]>> keys = lastOverlaySdt.get(id);
+        if(l.isEmpty()) {
+            if(keys != null) {
+                keys.remove(key);
+                if(keys.isEmpty())
+                    lastOverlaySdt.remove(id);
+            }
+            return false;
+        }
+        List<byte[]> was = (keys == null) ? null : keys.get(key);
+        if((was != null) && (was.size() == l.size())) {
+            boolean same = true;
+            for(int i = 0; same && (i < l.size()); i++)
+                same = java.util.Arrays.equals(was.get(i), l.get(i));
+            if(same)
+                return false;
+        }
+        if(keys == null) {
+            keys = new HashMap<String, List<byte[]>>();
+            lastOverlaySdt.put(id, keys);
+        }
+        keys.put(key, l);
+        return true;
+    }
+
+    /**
+     * Fire {@code GobOverlaySdtChanged} (a {@link LuaEvent}, payload {@code :gob()} {@code :key()} {@code :sdt()})
+     * — 176.2. <b>Broadcasts</b>, like {@link #fireGobSdt}: a native key is a resource name every addon can read.
+     * {@code l} is THIS firing's own, converted fresh per owner ({@link #sdtList}).
+     */
+    static void fireGobOverlaySdt(long gobId, String key, List<byte[]> l) {
+        for(Addon a : addons) {
+            if(hasSub(a, "GobOverlaySdtChanged"))
+                fireTo(a, "GobOverlaySdtChanged", LuaEvent.overlaySdt(a, gobId, key, sdtList(l)));
+        }
+        Addon c = consoleOwner;
+        if((c != null) && hasSub(c, "GobOverlaySdtChanged"))
+            fireTo(c, "GobOverlaySdtChanged", LuaEvent.overlaySdt(c, gobId, key, sdtList(l)));
     }
 
     /** An addon's own attach/remove ({@code gob:overlay}), queued onto the tick like the game's. */
@@ -3562,6 +3686,7 @@ public final class AddonManager {
     private static void gobLeft(long id, boolean rescan, String in) {
         heldNative.remove(Long.valueOf(id));   // the client drops a departing gob whole, decorations and all
         lastSdt.remove(Long.valueOf(id));      // 113.3: ...and what it last reported for the object's state
+        lastOverlaySdt.remove(Long.valueOf(id));   // 176.2: ...and for the state of the game's overlays on it
         List<LuaGobOverlay.Attach> mine = GobIntent.forget(id);   // 092.7: ...and what was ASKED for at it goes with the object
         // On the rescan there is no copy left for LuaGobOverlay.gobGone to have reported from, so the addon's
         // own overlays on an object only the dead session saw were never announced gone. Reported here from
@@ -5349,6 +5474,8 @@ public final class AddonManager {
                     overlaySubs = true;
                 if(key.equals("GobSdtChanged"))    // 113.3: arm the $cres.apply seam (see `sdtSubs`)
                     sdtSubs = true;
+                if(key.equals("GobOverlaySdtChanged"))   // 176.2: arm the overlay-bytes capture (see `overlaySdtSubs`)
+                    overlaySdtSubs = true;
                 if(key.equals("GobAdded"))         // 114.1: arm the render gate (see `gobAddedSubs`)
                     gobAddedSubs = true;
                 return owner.subs.on(key, fn);
@@ -6474,6 +6601,16 @@ public final class AddonManager {
     // ended drops out of every answer with nothing having to be notified, and a count that could disagree
     // with the caches is never built.
 
+    /** The first live session that holds {@code id}, in membership order, or {@code null} — the login a world
+     *  event's {@code :gob()} is read through ({@link LuaEvent}), since such an event belongs to no one session. */
+    static String gobUser(long id) {
+        for(Sessions.Member m : Sessions.members()) {
+            if(holds(m, id))
+                return m.user;
+        }
+        return null;
+    }
+
     /**
      * <b>The accounts of every live session whose object cache holds {@code id}</b>, in membership order —
      * {@code gob:sessions()}'s answer. Empty when nobody holds it, which is what a despawned object reads.
@@ -7468,6 +7605,20 @@ public final class AddonManager {
 
         SdtEvent(long gobId, byte[] sdt) {
             this.gobId = gobId;
+            this.sdt = sdt;
+        }
+    }
+
+    /** The value of one native key's state bytes on a gob, captured off-thread at the seam that changed it —
+     *  176.2. {@code sdt} is that moment's own copy ({@link LuaGobOverlay#nativeSdt}), never a re-read. */
+    private static final class OverlaySdtEvent {
+        final long gobId;
+        final String key;
+        final List<byte[]> sdt;
+
+        OverlaySdtEvent(long gobId, String key, List<byte[]> sdt) {
+            this.gobId = gobId;
+            this.key = key;
             this.sdt = sdt;
         }
     }
