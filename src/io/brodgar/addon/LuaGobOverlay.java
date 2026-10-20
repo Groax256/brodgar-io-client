@@ -7,7 +7,9 @@ import haven.GAttrib;
 import haven.GOut;
 import haven.Gob;
 import haven.Loading;
+import haven.OCache;
 import haven.PView;
+import haven.Sprite;
 import haven.render.Pipe;
 import haven.render.RenderTree;
 
@@ -434,6 +436,30 @@ public final class LuaGobOverlay extends GAttrib implements RenderTree.Node, PVi
             }
         }
         return n;
+    }
+
+    /**
+     * The state bytes of every game overlay on {@code g} keyed {@code key}, in {@code Gob.ols} order: a copy
+     * each, taken under the gob's own monitor (the one {@code OCache.ObjDelta.apply} and {@code Gob.defer}
+     * hold), so a loader thread rewriting {@code OCache.OlSprite.sdt} cannot tear one. Filtered by
+     * {@link #nativeKey} exactly as {@link #countNative} is, so the list's size IS {@code countNative(g, key)}.
+     * A member with no mill (built from a {@code Sprite}) answers the empty array.
+     */
+    static List<byte[]> nativeSdt(Gob g, String key) {
+        List<byte[]> out = new ArrayList<byte[]>();
+        synchronized(g) {
+            for(Gob.Overlay ol : g.ols) {
+                if(!key.equals(nativeKey(ol)))
+                    continue;
+                byte[] b = null;
+                if(ol.sm instanceof OCache.OlSprite)
+                    b = ((OCache.OlSprite)ol.sm).sdt;
+                else if(ol.sm instanceof Sprite.Mill.FromRes)
+                    b = ((Sprite.Mill.FromRes)ol.sm).sdt;
+                out.add((b == null) ? new byte[0] : b.clone());
+            }
+        }
+        return out;
     }
 
     // ---- the draw pass ----------------------------------------------------------------------------

@@ -6841,6 +6841,16 @@ public final class AddonManager {
         return t;
     }
 
+    /** One {@link #sdtTable} per member, as a 1-based array: the shape {@code overlay:sdt()} answers for a
+     *  native overlay, which is a union of every game overlay of one resource on the gob. Fresh tables
+     *  throughout, for the same reason {@link #sdtTable} is. */
+    static LuaTable sdtList(List<byte[]> l) {
+        LuaTable t = new LuaTable();
+        for(int i = 0; i < l.size(); i++)
+            t.set(i + 1, sdtTable(l.get(i)));
+        return t;
+    }
+
     /** {@code 0..255} bytes as a 1-based Lua array — the one conversion the live read above and
      *  {@link #fireGobSdt}'s event payload share. A fresh table every call: a handler must never be able
      *  to scribble on another owner's copy of one firing, or on what a later live read hands back. */

@@ -575,13 +575,29 @@ public final class LuaOverlay {
                 return (rec(owner, h) == null) ? LuaValue.NIL : LuaValue.valueOf(1);
             }
         });
+        // sdt() — the state bytes the server sent with each game overlay this entry stands for: one 1-based array
+        // of 0..255 numbers per member, in arrival order, so #sdt() == count(). Never decoded: the bytes are the
+        // resource's. nil for an overlay of yours and for a hafen.virtual() entity standing here (neither carries
+        // any), and once the overlay or its gob is gone. A VarArgFunction so a surplus argument is refused.
+        m.set("sdt", new VarArgFunction() {
+            public Varargs invoke(Varargs a) {
+                LuaOverlay h = handle(Args.only(a, 0, "overlay:sdt"), "sdt");
+                if(h.src != NATIVE)
+                    return LuaValue.NIL;
+                Gob g = AddonManager.getgob(h.user, h.gob);
+                if(g == null)
+                    return LuaValue.NIL;
+                List<byte[]> l = LuaGobOverlay.nativeSdt(g, h.key);
+                return l.isEmpty() ? LuaValue.NIL : AddonManager.sdtList(l);
+            }
+        });
         // exists() — is it still attached? False once removed, and false once the gob itself is gone.
         m.set("exists", new OneArgFunction() {
             public LuaValue call(LuaValue self) {
                 return LuaValue.valueOf(rec(owner, handle(self, "exists")) != null);
             }
         });
-        // info() — the snapshot escape hatch, for logging: {key, native, count, height?, res?, kind?, world?}.
+        // info() — the snapshot escape hatch, for logging: {key, native, count, height?, res?, kind?, world?, sdt?}.
         m.set("info", new OneArgFunction() {
             public LuaValue call(LuaValue self) {
                 LuaOverlay h = handle(self, "info");
@@ -592,8 +608,11 @@ public final class LuaOverlay {
                 t.set("key", LuaValue.valueOf(h.key));
                 t.set("native", LuaValue.valueOf(h.nat()));
                 if(h.src == NATIVE) {
+                    // count and sdt from ONE walk, so the two fields cannot disagree inside one snapshot
+                    List<byte[]> l = LuaGobOverlay.nativeSdt(AddonManager.getgob(h.user, h.gob), h.key);
                     t.set("res", LuaValue.valueOf(h.key));
-                    t.set("count", LuaValue.valueOf(LuaGobOverlay.countNative(AddonManager.getgob(h.user, h.gob), h.key)));
+                    t.set("count", LuaValue.valueOf(l.size()));
+                    t.set("sdt", AddonManager.sdtList(l));
                 } else if(h.src == VIRTUAL) {
                     LuaWorldEntity e = (LuaWorldEntity)r;
                     t.set("count", LuaValue.valueOf(1));

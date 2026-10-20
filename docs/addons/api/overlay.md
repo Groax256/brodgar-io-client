@@ -15,7 +15,7 @@ if my_gob then my_gob:overlay():add("mark"):text("here"):color{255, 90, 90} end
 | Unprotected | The attach included: what you paint at a gob is your own drawing and changes nothing the server, the client or another addon owns. The same basis as [a HUD overlay](ui/overlay.md). |
 | Hangs on the object, not a character | Every character of yours that sees the gob draws it, one that loads the object afterwards included. One `:remove(key)` takes it off all of them. |
 | Ends with the object | When the last character loses sight of it the record goes, the moment [`GobRemoved`](event/bus/world.md#world) fires. |
-| Not here | A crop's growth stage is server state: [`gob:sdt()`](gob.md#state). |
+| Not here | A crop's growth stage is the object's own state: [`gob:sdt()`](gob.md#state). The state bytes the game sent with one of its overlays are [`overlay:sdt()`](#the-games-state-bytes). |
 
 > **Hiding the object does not hide what stands at it.** [`gob:visible(false)`](look.md) withholds the model alone. Your overlays and the game's own (name label, health bar) go on drawing over empty ground. Remove yours in the same call if that is not what you want.
 
@@ -96,13 +96,14 @@ One entry of the collection: yours, the game's, or something you stood at the go
 | `overlay:kind()` | `string \| nil` | Unprotected | `"draw"`/`"text"` for yours, `"ghost"`/`"sprite"`/`"object"` for one you stood there. `nil` for a native one and for a bare one. |
 | `overlay:res()` | `string \| nil` | Unprotected | What it is drawn from (resource name, asset path). `nil` for a painter of yours, and once the overlay is gone. |
 | `overlay:count()` | `number \| nil` | Unprotected | How many of the game's own overlays this entry stands for. |
+| `overlay:sdt()` | `number[][] \| nil` | Unprotected | The state bytes the server sent with each of them ([The game's state bytes](#the-games-state-bytes)). |
 | `overlay:exists()` | `boolean` | Unprotected | Still there. |
 | `overlay:info()` | `table \| nil` | Unprotected | A plain snapshot. The shape follows the kind. |
 
 | Rule | Detail |
 |---|---|
-| A native overlay is a union | A gob may carry several overlays of one resource, and the name is all a key can address. So they collapse to one Overlay, and `:count()` publishes the multiplicity. Yours count 1. `gob:info().overlays` is the uncollapsed list of resource names, absent when the gob carries none, like every [`GobInfo`](types/world.md#gobinfo) field. |
-| `:info()` shapes | Both carry `key`, `native`, `count`. Yours adds `kind` and `world` (`true` for a thing standing in the world, `false` for a painter, both absent while bare). It adds `res` when drawn from a resource or asset path, and `height` on a painter of yours. The face is not in it: a font handle is a live object. A native one adds `res` (the key itself) and carries neither `kind` nor `world`. |
+| A native overlay is a union | A gob may carry several overlays of one resource, and the name is all a key can address. So they collapse to one Overlay, and `:count()` publishes the multiplicity. `:sdt()` keeps each member's bytes apart, one array per member. Yours count 1. `gob:info().overlays` is the uncollapsed list of resource names, absent when the gob carries none, like every [`GobInfo`](types/world.md#gobinfo) field. |
+| `:info()` shapes | Both carry `key`, `native`, `count`. Yours adds `kind` and `world` (`true` for a thing standing in the world, `false` for a painter, both absent while bare). It adds `res` when drawn from a resource or asset path, and `height` on a painter of yours. The face is not in it: a font handle is a live object. A native one adds `res` (the key itself) and `sdt` (what `:sdt()` answers, as a copy), and carries neither `kind` nor `world`. Only a native one carries `sdt`. |
 | Interned on the key | `gob:overlay():get(key)` hands back the same object every time. A replace leaves the handle you hold naming the new record. `:exists()` goes false when removed or when the gob is gone. `tostring(overlay)` is `Overlay(<key>@<gobid>)`, with `*` before the key on the game's own and `~` on a thing you stood there. |
 | Dies with its gob | The record lives on the game object: a felled tree takes yours with it and nothing is kept. A gob that returns is bare, and re-attaching is your call from [`GobAdded`](event/bus/world.md#world). The moment is the last of your characters losing it, when [`GobOverlayRemoved`](event/bus/world.md#overlays-coming-and-going) fires. A thing you stood here [dies with the gob too](virtual/README.md#the-anchor-is-an-argument). |
 | Dies with your addon | A `:reload` or a disable removes every overlay you attached from every character and leaves the game's. |
@@ -116,6 +117,31 @@ for _, overlay in ipairs(tree:overlay():list()) do
   hafen.log():write(overlay:key() .. " " .. tostring(overlay:kind()))  -- ...and listed here: "virtual#7 sprite"
 end
 ```
+
+## The game's state bytes
+
+The server sends state bytes with each of its overlays, as it does with an object's resource. `overlay:sdt()` answers them for a native overlay: one 1-based array of `0..255` numbers per game overlay the entry stands for. What they mean belongs to the overlay resource's own published code. The client never decodes them.
+
+```lua
+local session = hafen.session():current()
+for _, gob in ipairs(session:world():gob():list()) do
+  local dust = gob:overlay():get("gfx/fx/cavewarn")
+  local members = dust and dust:sdt()
+  if members then
+    for index, state_bytes in ipairs(members) do
+      hafen.log():write(("dust %d at %d: %s"):format(index, gob:id(), tostring(state_bytes[1])))
+    end
+  end
+end
+```
+
+| Answer | Meaning |
+|---|---|
+| One array per member | In the order the overlays arrived, so `#overlay:sdt() == overlay:count()`. Ordered, never addressed: a member has no key of its own. |
+| `{}` as a member | The server sent no bytes with that overlay. |
+| `nil` | An overlay of yours, a thing you stood at the gob (neither carries any), or the overlay or its gob is gone. |
+| A fresh table every read | Two reads are never the same table, and writing into one changes nothing. |
+| An ended overlay | One the server has ended can stay listed, bytes and all, while its effect plays out on screen. |
 
 ---
 

@@ -113,6 +113,8 @@ end
 
 Reading every frame to catch a change is a sweep. [`GobSdtChanged`](event/bus/world.md#the-state-changing) fires when the bytes change, once per object however many characters see it, for the first state as well as every one after.
 
+The game's overlays on the gob carry state bytes of their own, read through [`overlay:sdt()`](overlay.md#the-games-state-bytes).
+
 ## The poses it is in
 
 `gob:pose()` answers the animation poses in force on a composed body (a player, an animal) as an array of pose resource names.

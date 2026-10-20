@@ -46,6 +46,7 @@ a changed `Placement` with no further wiring: the next `autotick` finds the two 
 | What | Where |
 |---|---|
 | A served overlay arriving | `OCache.$overlay` (a `Delta`): builds a `Gob.Overlay` around an `OCache.OlSprite` (a `Sprite.Mill` closing over the resource and state bytes) and calls `Gob.addol` |
+| Its state bytes changing | `OlSprite.sdt` is **not final**. `$overlay` on a known overlay id with different bytes: if the sprite is a `Sprite.CUpd`, `update(...)` in place and `os.sdt` rewritten; otherwise a new `Gob.Overlay` is `addol`ed **before** the old one is `remove(false)`d, so `ols` briefly holds both. A removal of a `Sprite.CDel` sprite only calls `delete()`; it stays in `ols` until `Gob.ctick`'s `ol.tick(dt)` answers done. A `Gob.Overlay` from `Sprite.Mill.of` carries its bytes in `Sprite.Mill.FromRes.sdt`; one built from a bare `Sprite` has `sm == null` |
 | The overlay object | `Gob.Overlay`: `spr` (`null` until `init()` runs), `slots` (`null` until it stands in a render tree — **the "in a tree" test**), `init()` (lazily creates the sprite and adds it to `gob.slots`), `remove0()`/`add0()` |
 | Adding one | `Gob.addol(Overlay, boolean)`: `ol.init()`, `ol.add0()`, `ols.add(ol)` |
 | Per-tick upkeep | `Gob.ctick()`: for each `Overlay` in `ols` whose `slots` is still `null`, retries `init()`; if it is **still** `null` afterwards, the loop `continue`s past `ol.tick(dt)` unless this session is dormant (the `rts:` comment there states the contract: an overlay in no render tree is not ticked) |
