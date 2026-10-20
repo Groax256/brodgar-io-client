@@ -1,0 +1,9 @@
+{
+  "name": "177.1 — the client's own gobs leave the world surface",
+  "id": "177-client-gobs-and-overlay-arity.1",
+  "version": "1.0.0",
+  "author": "brodgar",
+  "description": "Self-checking suite for task 177.1: no gob event and no world read carries one of the client's own negative-id gobs, while the game's objects and overlays are still reported.",
+  "api_version": "1.0",
+  "files": ["main.lua"]
+}

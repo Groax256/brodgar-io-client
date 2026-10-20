@@ -1201,7 +1201,7 @@ public final class AddonManager {
                 // state that never finished init is one whose gobs nothing else in this layer knows about,
                 // and its queue would grow for the life of the session.
                 public void added(Gob g)   {
-                    if(st.addonRoot == null)
+                    if((st.addonRoot == null) || clientGob(g))
                         return;
                     // 114.1: hold this copy out of the render tree until the drain below has announced it.
                     // BEFORE the enqueue -- a drain landing between the two would clear a flag not yet set.
@@ -1209,7 +1209,10 @@ public final class AddonManager {
                         armHold(g);
                     st.gobEvents.add(new GobEvent(true, g));
                 }
-                public void removed(Gob g) { if(st.addonRoot != null) st.gobEvents.add(new GobEvent(false, g)); }
+                public void removed(Gob g) {
+                    if((st.addonRoot != null) && !clientGob(g))
+                        st.gobEvents.add(new GobEvent(false, g));
+                }
             };
             oc.callback(cb);
             st.ocCb = cb;             // hold a strong ref (OCache stores callbacks in a WeakList)
@@ -3153,6 +3156,8 @@ public final class AddonManager {
     private static void nativeOverlayEvent(Gob g, Gob.Overlay ol, boolean added) {
         if(!overlaySubs || (g == null) || (ol == null))
             return;                     // nobody is listening: the seam costs one volatile read
+        if(clientGob(g))
+            return;                     // no world object: see clientGob
         try {
             String key = LuaGobOverlay.nativeKey(ol);
             if(key == null)
@@ -3190,14 +3195,10 @@ public final class AddonManager {
      *  session the gob is in — see {@link #queueOverlayEvent}. The value is the seam's own, never re-read at
      *  the drain, for the reason {@link SdtEvent} carries its bytes.
      *
-     *  <p>Never for one of the client's own gobs (an {@code OCache.Virtual}, carrying a one-shot effect such as a
-     *  footstep's sound). Its id is not the server's but a per-cache counter from -1 down, so the same id names a
-     *  different throwaway gob in every session, and {@code Gob.ctick} drops it the tick its effect ends: it is no
-     *  world object, and the once-per-object gate cannot key on it. The test is the CLASS, never
-     *  {@code Gob.virtual}: the server flags objects of its own virtual too, under their real ids, and the cave-in
-     *  warning's dust hangs on one of those. */
+     *  <p>Never for one of the client's own gobs ({@link #clientGob}): this also guards the {@code CUpd} seam's
+     *  path, which does not pass through {@link #nativeOverlayEvent}. */
     private static void queueOverlaySdtEvent(Gob g, String key) {
-        if(g instanceof OCache.Virtual)
+        if(clientGob(g))
             return;
         SessionState st = queueState(io.brodgar.session.Sessions.uifor(g.glob));
         if(st != null)
@@ -6493,7 +6494,17 @@ public final class AddonManager {
      */
     static Gob getgob(long id) {
         OCache oc = oc();
-        return (oc == null) ? null : oc.getgob(id);
+        Gob g = (oc == null) ? null : oc.getgob(id);
+        return ((g == null) || clientGob(g)) ? null : g;
+    }
+
+    /** A gob the CLIENT minted to carry a one-shot effect (an {@code OCache.Virtual}: a footstep's sound, an
+     *  effect an animation throws off) -- no server object. Its id is a per-cache counter from -1 down, so one
+     *  id names a different gob in every session, and Gob.ctick drops it the tick its effect ends. The world
+     *  surface is what the server sends, so none of these is in it. The test is the CLASS, never Gob.virtual:
+     *  OCache.receive sets that flag on server objects too (delta flag 2), under their real ids. */
+    static boolean clientGob(Gob g) {
+        return g instanceof OCache.Virtual;
     }
 
     static Gob playerGob() {
@@ -6579,7 +6590,8 @@ public final class AddonManager {
      */
     static Gob getgob(String user, long id) {
         OCache oc = oc(user);
-        return (oc == null) ? null : oc.getgob(id);
+        Gob g = (oc == null) ? null : oc.getgob(id);
+        return ((g == null) || clientGob(g)) ? null : g;
     }
 
     // ------------------------------------------------------- one OBJECT, however many hold it (079.3)
@@ -6666,7 +6678,8 @@ public final class AddonManager {
         if(gl == null)
             return false;
         try {
-            return gl.oc.getgob(id) != null;
+            Gob g = gl.oc.getgob(id);
+            return (g != null) && !clientGob(g);
         } catch(RuntimeException e) {
             return false;
         }
@@ -6690,7 +6703,7 @@ public final class AddonManager {
             return out;
         synchronized(oc) {
             for(Gob g : oc) {
-                if((g != null) && (oc.getgob(g.id) == g))
+                if((g != null) && !clientGob(g) && (oc.getgob(g.id) == g))
                     out.add(g);
             }
         }

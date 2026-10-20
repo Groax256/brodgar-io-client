@@ -39,7 +39,7 @@ end)
 | The hold changes no data | What answers inside the handler is what answers a step later: [`gob:name()`](../../gob.md), [`gob:sdt()`](../../gob.md#state), [`gob:hitbox()`](../../gob.md) for a resource-drawn object. What has not resolved answers `nil`. A composed object (a character or an animal carrying equipment) answers `nil` a moment longer and the client does not wait for it. Ask again from a [timer](../../timer.md). |
 | Only while somebody is listening | Until an addon subscribes to `GobAdded` nothing is held. The cost begins with the first subscription and ends at the next `:reload`, not at `subscription:off()`. The seam stays armed. A hold with nobody to hand the object to is released by the next frame. [`GobOverlayAdded`](#overlays-coming-and-going), [`GobSdtChanged`](#the-state-changing) and [`GobOverlaySdtChanged`](#an-overlays-state-changing) arm seams of their own. |
 | Drawn anyway after a second | A handler that takes longer, or an addon disabled mid-flight, costs a late frame and never a missing object. |
-| Only objects the game sends | A [thing of your own](../../virtual/README.md) (a ghost, a sprite, a model, a standing widget, a patch) fires no `GobAdded`. It is drawn the moment you place it. |
+| Only objects the game sends | A [thing of your own](../../virtual/README.md) (a ghost, a sprite, a model, a standing widget, a patch) fires no `GobAdded`. It is drawn the moment you place it. Neither does a gob the client makes for itself to carry a footstep's sound or a passing effect, and nothing on one fires an overlay event. |
 | `GobRemoved` holds nothing | It reports an object that has already left. |
 
 ### Overlays coming and going

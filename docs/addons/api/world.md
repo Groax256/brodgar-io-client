@@ -68,6 +68,7 @@ end
 |---|---|
 | `filter` | The canonical [filter](conventions.md#the-filter-argument): `nil`, a name substring, or a predicate receiving a Gob. `nearest` and `within` measure from that character and skip its own gob. None of the verbs throws. |
 | `:get(id)` never answers `nil` | Not for an id that character has not loaded, not for one that never existed. Anchor to a gob before it streams in. `gob:exists()` is the liveness test. |
+| What the server sends | The collection holds the game's objects and nothing the client makes for itself: a footstep's sound or a passing effect is carried by a gob of the client's own, which no verb lists and `:get` never finds. |
 | A Gob is a table key | `seen[gob] = true` de-duplicates across sweeps without ids. Two of your characters looking at one tree find the same value ([identity](gob.md#identity)). |
 | Reacting instead of polling | The `GobAdded`/`GobRemoved` [events](event/bus/world.md#world), not a scan every frame. |
 
